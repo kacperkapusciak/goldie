@@ -26,8 +26,8 @@ goldie - App Store screenshots and previews, driven by argent
   goldie doctor     Check the toolchain, simulators, flags and flows
   goldie capture    Replay every scene flow and save raw captures
   goldie frame      Composite raw screenshots into framed, captioned PNGs
-  goldie preview    Join the raw clips into the app preview video
-  goldie verify     Check finished assets against Apple's spec table
+  goldie preview    Join the raw clips into the app preview video (iOS; Play takes no videos)
+  goldie verify     Check finished assets against the store spec tables
   goldie manifest   Write out/store.json for the studio app
   goldie studio     Serve the studio at http://localhost:4321 (--port <n>, --no-open)
   goldie all        capture -> frame -> preview -> manifest -> verify
@@ -151,8 +151,8 @@ async function runCapture(cfg: LoadedConfig, devices: DeviceKey[]) {
     try {
       await capture(cfg, d);
     } finally {
-      // Leave the simulator as it was found; a pinned status bar is sticky.
-      await device.clearStatusBar(udid);
+      // Leave the device as it was found; a pinned status bar is sticky.
+      await device.clearStatusBar(d, udid);
     }
   }
 }

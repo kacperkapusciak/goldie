@@ -20,8 +20,14 @@ const config: GoldieConfig = {
   // banners into the captures.
   appPath: `${process.env.HOME}/Library/Developer/Xcode/DerivedData/<App>-<hash>/Build/Products/Release-iphonesimulator/<App>.app`,
   bundleId: "com.example.app",
+  // Google Play screenshots too: add "android-phone" to devices, start an
+  // emulator (emulator -avd <name>), and point android at the release .apk.
+  // android: {
+  //   appPath: "/path/to/app-release.apk",
+  //   applicationId: "com.example.app",
+  // },
 
-  devices: ["iphone-6.9"], // keys from src/specs.ts
+  devices: ["iphone-6.9"], // keys from src/specs.ts; "android-phone" for Google Play
   locales: ["en-US"],
   appearance: "light",
 

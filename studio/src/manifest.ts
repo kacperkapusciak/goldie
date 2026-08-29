@@ -25,12 +25,13 @@ export type Decoration =
 export type LayoutEntry = { key: string; label: string; description: string; span: number };
 export type TemplateEntry = { key: string; label: string; description: string; sequence: string[] };
 
+/** null simulatorName / preview mark an android device; the strip fully renders only iOS today (multi-device UI is PR #1). */
 export type DeviceEntry = {
   key: string;
   label: string;
-  simulatorName: string;
+  simulatorName: string | null;
   screenshot: { width: number; height: number };
-  preview: { width: number; height: number };
+  preview: { width: number; height: number } | null;
 };
 
 export type DesignScene = {

@@ -48,7 +48,9 @@ export async function renderScreenshots(cfg: LoadedConfig, deviceKey: DeviceKey,
   for (const name of await readdir(outDir)) {
     if (name.endsWith(".png")) await rm(join(outDir, name), { force: true });
   }
-  const bezel = cfg.theme.screenOnly ? null : await loadImage(framePath(cfg));
+  // A device spec can force screen-only rendering (no bezel art exists for it).
+  const screenOnly = Boolean(cfg.theme.screenOnly || spec.screenOnly);
+  const bezel = screenOnly ? null : await loadImage(framePath(cfg));
   registerFonts();
 
   const tile = spec.screenshot;
@@ -70,7 +72,7 @@ export async function renderScreenshots(cfg: LoadedConfig, deviceKey: DeviceKey,
   const files = await Promise.all(
     jobs.map(async ({ scene, layout, secondScene, first }) => {
       console.log(`  frame ${scene.id}`);
-      const c = compose(layout, tile, cfg.theme, { screenOnly: cfg.theme.screenOnly });
+      const c = compose(layout, tile, cfg.theme, { screenOnly });
 
       const canvas = createCanvas(c.width, c.height);
       const ctx = canvas.getContext("2d");
@@ -447,6 +449,10 @@ export async function renderPreview(cfg: LoadedConfig, deviceKey: DeviceKey, loc
   const spec = DEVICES[deviceKey];
   const scene = cfg.scenes.find(isPreview);
   if (!scene) return null;
+  if (!spec.preview) {
+    console.log(`  ${deviceKey} has no preview pipeline (Google Play takes a YouTube link)`);
+    return null;
+  }
   const manifest = await readManifest(cfg, deviceKey);
   if (!manifest.preview)
     throw new Error("No preview clips in the capture manifest. Run: goldie capture");
@@ -560,6 +566,10 @@ export async function verify(
     );
   }
 
+  // A null preview spec means no video pipeline; screenshots are the whole story.
+  const previewSpec = spec.preview;
+  if (!previewSpec) return ok;
+
   const previewDir = join(cfg.outDir, "previews", spec.label, locale);
   const videos = await exec("sh", ["-c", `ls ${previewDir}/*.mp4 2>/dev/null`], { quiet: true });
   for (const file of videos.stdout.split("\n").filter(Boolean)) {
@@ -582,8 +592,8 @@ export async function verify(
     const checks: Array<[string, boolean, string]> = [
       [
         "size",
-        video?.width === spec.preview.width && video?.height === spec.preview.height,
-        `${video?.width}x${video?.height} (need ${spec.preview.width}x${spec.preview.height})`,
+        video?.width === previewSpec.width && video?.height === previewSpec.height,
+        `${video?.width}x${video?.height} (need ${previewSpec.width}x${previewSpec.height})`,
       ],
       ["codec", video?.codec_name === "h264", String(video?.codec_name)],
       ["fps", fps <= PREVIEW.fps + 0.01, fps.toFixed(2)],

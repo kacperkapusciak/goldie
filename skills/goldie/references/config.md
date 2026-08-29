@@ -19,7 +19,12 @@ const config: GoldieConfig = {
   appPath: `${process.env.HOME}/Library/Developer/Xcode/DerivedData/<App>-<hash>/Build/Products/Release-iphonesimulator/<App>.app`,
   bundleId: "com.example.app",
 
-  devices: ["iphone-6.9"],       // keys from $GOLDIE/src/specs.ts
+  // Google Play too: add "android-phone" and the android block below. Scenes
+  // and flows are shared across devices; argent flows replay on Android when
+  // their selectors match. The emulator must already be running.
+  // android: { appPath: "/path/to/app-release.apk", applicationId: "com.example.app" },
+
+  devices: ["iphone-6.9"],       // keys from $GOLDIE/src/specs.ts; "android-phone" for Google Play
   locales: ["en-US"],
   appearance: "light",           // simulator appearance for every capture
 

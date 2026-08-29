@@ -14,13 +14,24 @@ async function onPath(bin: string, args: string[] = ["--version"]): Promise<bool
 
 export async function doctor(cfg: LoadedConfig): Promise<boolean> {
   const checks: Check[] = [];
+  const platforms = new Set(cfg.devices.map((key) => DEVICES[key].platform));
 
-  checks.push({
-    name: "xcrun",
-    ok: await onPath("xcrun", ["simctl", "help"]),
-    detail: "iOS simulator control",
-    fix: "Install Xcode and run: xcode-select --install",
-  });
+  if (platforms.has("ios")) {
+    checks.push({
+      name: "xcrun",
+      ok: await onPath("xcrun", ["simctl", "help"]),
+      detail: "iOS simulator control",
+      fix: "Install Xcode and run: xcode-select --install",
+    });
+  }
+  if (platforms.has("android")) {
+    checks.push({
+      name: "adb",
+      ok: await onPath("adb", ["version"]),
+      detail: "Android emulator control",
+      fix: "Install Android platform-tools and put adb on the PATH",
+    });
+  }
   checks.push({
     name: "ffmpeg",
     ok: await onPath("ffmpeg", ["-version"]),
@@ -58,36 +69,71 @@ export async function doctor(cfg: LoadedConfig): Promise<boolean> {
     fix: "unset ARGENT_SCREENSHOT_SCALE",
   });
 
-  const appPath = resolve(cfg.root, cfg.appPath);
-  checks.push({
-    name: "app build",
-    ok: existsSync(appPath),
-    detail: appPath,
-    fix: `Build it: (cd ${cfg.appRoot} && npx expo run:ios --configuration Release)`,
-  });
+  if (platforms.has("ios")) {
+    const appPath = resolve(cfg.root, cfg.appPath);
+    checks.push({
+      name: "app build",
+      ok: existsSync(appPath),
+      detail: appPath,
+      fix: `Build it: (cd ${cfg.appRoot} && npx expo run:ios --configuration Release)`,
+    });
 
-  // A Debug build needs Metro running and paints LogBox banners over the UI -
-  // both end up in the captures.
-  const isDebug = /Debug-iphonesimulator/.test(appPath);
-  checks.push({
-    name: "release build",
-    ok: !isDebug,
-    warnOnly: true,
-    detail: isDebug
-      ? "app is a Debug build: it requires Metro and paints dev warning banners into captures"
-      : "release build",
-    fix: `(cd ${cfg.appRoot} && npx expo run:ios --configuration Release) then point appPath at the Release-iphonesimulator .app`,
-  });
+    // A Debug build needs Metro running and paints LogBox banners over the UI -
+    // both end up in the captures.
+    const isDebug = /Debug-iphonesimulator/.test(appPath);
+    checks.push({
+      name: "release build",
+      ok: !isDebug,
+      warnOnly: true,
+      detail: isDebug
+        ? "app is a Debug build: it requires Metro and paints dev warning banners into captures"
+        : "release build",
+      fix: `(cd ${cfg.appRoot} && npx expo run:ios --configuration Release) then point appPath at the Release-iphonesimulator .app`,
+    });
+  }
+
+  if (platforms.has("android")) {
+    const apk = cfg.android ? resolve(cfg.root, cfg.android.appPath) : null;
+    checks.push({
+      name: "android app build",
+      ok: Boolean(apk?.endsWith(".apk") && existsSync(apk)),
+      detail: apk ?? "config has no android block",
+      fix: apk
+        ? "Build the .apk and point android.appPath at it"
+        : 'Add android: { appPath: "<path to .apk>", applicationId: "<id>" } to the config',
+    });
+
+    // A debuggable build paints StrictMode flashes and dev overlays into captures.
+    const isDebugApk = apk !== null && /debug/i.test(apk);
+    checks.push({
+      name: "android release build",
+      ok: !isDebugApk,
+      warnOnly: true,
+      detail: isDebugApk
+        ? 'apk path contains "debug": debuggable builds paint StrictMode and dev overlays into captures'
+        : "release build",
+      fix: `(cd ${cfg.appRoot} && npx expo run:android --variant release) then point android.appPath at the release .apk`,
+    });
+  }
 
   for (const key of cfg.devices) {
     const spec = DEVICES[key];
     const udid = await device.resolveUdid(key).catch(() => null);
-    checks.push({
-      name: `simulator ${spec.simulatorName}`,
-      ok: Boolean(udid),
-      detail: udid ?? "not installed",
-      fix: `xcrun simctl create "${spec.simulatorName}" "${spec.simulatorName}"`,
-    });
+    if (spec.platform === "android") {
+      checks.push({
+        name: `emulator ${key}`,
+        ok: Boolean(udid),
+        detail: udid ?? 'no adb device in "device" state',
+        fix: "emulator -avd <name>   (list with: emulator -list-avds)",
+      });
+    } else {
+      checks.push({
+        name: `simulator ${spec.simulatorName}`,
+        ok: Boolean(udid),
+        detail: udid ?? "not installed",
+        fix: `xcrun simctl create "${spec.simulatorName}" "${spec.simulatorName}"`,
+      });
+    }
   }
 
   checks.push({

@@ -5,9 +5,10 @@ description: >-
   goldie toolkit: explore the app on a simulator, author argent flows for its
   key user flows, render framed screenshots and a plain preview video, and open a local
   studio showing the finished store page. Use this whenever the user asks
-  for App Store screenshots, store assets, marketing screenshots, an app
-  preview video, or mentions goldie, even if they only say something like
-  "make screenshots for the store" or "I need App Store assets for this app".
+  for App Store or Google Play screenshots, store assets, marketing
+  screenshots, an app preview video, or mentions goldie, even if they only say
+  something like "make screenshots for the store" or "I need App Store assets
+  for this app".
   Also use it for follow-ups on assets goldie already made: new headlines, a
   different background or bezel, swapping or reordering a screenshot, or a
   changed preview story. Run it from inside the mobile app's repo.
@@ -187,6 +188,17 @@ assets exist, where they are, and whether they pass Apple's rules. The
 studio's sidebar shows the same checks; a red row is a rule violation. The
 Design panel lets the user restyle backgrounds, layouts, bezels and fonts
 without you, and Export downloads an upload-ready zip.
+
+## Google Play
+
+The `android-phone` device key renders Play phone screenshots (1080 x 1920)
+from the same scenes: scenes and flows are shared across devices, and argent
+flows replay on Android when their selectors match. Add the config's
+`android: { appPath: "<apk>", applicationId: "<id>" }` block, start an
+emulator first (`emulator -avd <name>`; goldie does not boot one), then run
+the same capture/frame commands. Android tiles render screen-only (no bundled
+bezel art), and no preview video exists for Play - the promo video is a
+YouTube link - so `preview` skips the device.
 
 ## Iterating on an existing setup
 

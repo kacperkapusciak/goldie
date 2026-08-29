@@ -57,6 +57,29 @@ goldie studio     Preview and tweak the assets in the browser
 Output lands in `out/`: 6.9" screenshots (1320 x 2868) and a 886 x 1920
 H.264 preview, per locale. Previews must run 15 to 30 seconds.
 
+## Google Play
+
+Add the `android-phone` device key to render Google Play phone screenshots
+(1080 x 1920) from the same scenes. Argent flows replay on Android too, so
+the scene flows are shared; a flow works on both platforms when its selectors
+match. The captures come from a running Android emulator - goldie does not
+boot one, so start it first (`emulator -avd <name>`, list with
+`emulator -list-avds`) and add the build to the config:
+
+```ts
+devices: ["iphone-6.9", "android-phone"],
+android: {
+  appPath: "/path/to/app-release.apk",
+  applicationId: "com.example.app",
+},
+```
+
+Android tiles render as bare screens with the drop shadow (`screenOnly`
+rendering): no Pixel bezel art is bundled, to stay clear of device-art
+licensing. No preview video is rendered for Play either - the Play Store's
+promo video is a YouTube link, not an upload - so `preview` and `all` simply
+skip it for this device.
+
 ## Design
 
 https://github.com/user-attachments/assets/d6171a90-8fc1-437b-a574-5a8547068a3c

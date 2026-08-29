@@ -146,6 +146,8 @@ export type GoldieConfig = {
   /** Simulator .app bundle to install. */
   appPath: string;
   bundleId: string;
+  /** The .apk to install and its applicationId. Required when `devices` names an android key. */
+  android?: { appPath: string; applicationId: string };
   devices: DeviceKey[];
   locales: Locale[];
   /** Simulator appearance for every capture. */

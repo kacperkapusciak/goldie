@@ -175,7 +175,8 @@ export function Strip({
     };
   };
   const entries: Entry[] = [];
-  if (segments.length > 0) {
+  // tileSpec.preview is null on android devices, which also never have clips.
+  if (segments.length > 0 && tileSpec.preview) {
     entries.push({
       key: "preview",
       width: tileSpec.preview.width,

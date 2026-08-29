@@ -43,14 +43,15 @@ export async function capture(cfg: LoadedConfig, deviceKey: DeviceKey): Promise<
   const rawDir = join(cfg.outDir, "raw", deviceKey);
   await mkdir(rawDir, { recursive: true });
 
-  console.log(`> ${spec.simulatorName} (${udid})`);
-  await device.prepare(udid, cfg.locales[0]!, cfg.appearance);
+  const app = appFor(cfg, deviceKey);
+  console.log(`> ${spec.simulatorName ?? spec.label} (${udid})`);
+  await device.prepare(deviceKey, udid, cfg.locales[0]!, cfg.appearance);
   // A reinstall wipes app data, which is what makes a re-capture deterministic:
   // flows that create records start from the same empty state every run.
-  await device.installApp(udid, resolve(cfg.root, cfg.appPath), cfg.bundleId);
+  await device.installApp(udid, app.path, app.id);
   // First launch after a reinstall pays for a cold JS bundle, which can outlast
   // the launch step's devtools handshake budget. Burn that cost here instead.
-  await device.warmUp(udid, cfg.bundleId);
+  await device.warmUp(udid, app.id);
 
   const manifest: CaptureManifest = {
     device: deviceKey,
@@ -74,26 +75,54 @@ export async function capture(cfg: LoadedConfig, deviceKey: DeviceKey): Promise<
     // pinned for the run, and that restore can land after `argent flow run` has
     // already exited. A single pin loses that race often enough that two
     // otherwise identical runs differ by the wifi and battery glyphs alone.
-    await device.pinStatusBar(udid);
+    await device.pinStatusBar(deviceKey, udid);
     await sleep(800);
-    await device.pinStatusBar(udid);
+    await device.pinStatusBar(deviceKey, udid);
     await sleep(400);
     const file = join(rawDir, `${scene.id}.png`);
     await argent.runToFile("screenshot", { udid, scale: 1.0, includeImageInContext: false }, file);
-    await assertSize(file, spec.native.width, spec.native.height);
+    if (spec.native) {
+      await assertSize(file, spec.native.width, spec.native.height);
+    } else if (manifest.screenshots.length === 0) {
+      // No fixed native size for this device (emulators vary); the renderer
+      // cover-fits whatever comes back, so the size is informational.
+      const got = await imageSize(file);
+      console.log(`  capturing at ${got.width}x${got.height}`);
+    }
     manifest.screenshots.push({ sceneId: scene.id, file });
   }
 
   const previewScene = cfg.scenes.find(isPreview);
-  if (previewScene) manifest.preview = await captureSegments(cfg, previewScene, udid, rawDir);
+  if (previewScene) {
+    if (spec.preview) {
+      manifest.preview = await captureSegments(cfg, previewScene, deviceKey, udid, rawDir);
+    } else {
+      console.log(`  Google Play has no preview videos; skipping segments for ${deviceKey}`);
+    }
+  }
 
   await writeFile(join(rawDir, "manifest.json"), JSON.stringify(manifest, null, 2));
   return manifest;
 }
 
+/** The build a device installs: the .app for iOS, the config's .apk for android. */
+function appFor(cfg: LoadedConfig, deviceKey: DeviceKey): { path: string; id: string } {
+  if (DEVICES[deviceKey].platform === "android") {
+    if (!cfg.android) {
+      throw new Error(
+        `Device "${deviceKey}" needs the config's android block: ` +
+          `android: { appPath: "<path to .apk>", applicationId: "<id>" }`,
+      );
+    }
+    return { path: resolve(cfg.root, cfg.android.appPath), id: cfg.android.applicationId };
+  }
+  return { path: resolve(cfg.root, cfg.appPath), id: cfg.bundleId };
+}
+
 async function captureSegments(
   cfg: LoadedConfig,
   scene: PreviewScene,
+  deviceKey: DeviceKey,
   udid: string,
   rawDir: string,
 ): Promise<CaptureManifest["preview"]> {
@@ -109,7 +138,7 @@ async function captureSegments(
     console.log(`  preview segment ${segment.id}`);
     const file = join(rawDir, `${scene.id}-${segment.id}.mp4`);
 
-    await device.pinStatusBar(udid);
+    await device.pinStatusBar(deviceKey, udid);
     // trimStatic and showTouches both default to true and both ruin a marketing
     // clip: trimming destroys real-time pacing, and the touch pulse is an overlay.
     await argent.run("screen-recording-start", {
@@ -150,12 +179,16 @@ async function captureSegments(
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-async function assertSize(file: string, width: number, height: number): Promise<void> {
+async function imageSize(file: string): Promise<{ width: number; height: number }> {
   const r = await execOrThrow("sips", ["-g", "pixelWidth", "-g", "pixelHeight", file]);
-  const got = {
+  return {
     width: Number(r.stdout.match(/pixelWidth:\s*(\d+)/)?.[1]),
     height: Number(r.stdout.match(/pixelHeight:\s*(\d+)/)?.[1]),
   };
+}
+
+async function assertSize(file: string, width: number, height: number): Promise<void> {
+  const got = await imageSize(file);
   if (got.width !== width || got.height !== height) {
     throw new Error(
       `${file} is ${got.width}x${got.height}, expected ${width}x${height}. ` +
