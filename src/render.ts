@@ -220,14 +220,16 @@ function drawDevice(
   if (!bezel && drawnBezel) {
     // Generic drawn bezel: the bezel PNGs' frame box filled as a dark ring
     // around the screen cutout, so android tiles share the iOS proportions
-    // without shipping licensed device art.
+    // without shipping licensed device art. Filled the same black Android
+    // bakes into a screenshot's corner mask and punch-hole, so those merge
+    // into the bezel instead of reading as a second misaligned ring.
     const ring = screen.left - frame.left;
     const radius = screen.radius + ring;
     ctx.save();
     ctx.shadowColor = SCREEN_SHADOW.color;
     ctx.shadowBlur = tile.width * SCREEN_SHADOW.blur;
     ctx.shadowOffsetY = tile.width * SCREEN_SHADOW.offsetY;
-    ctx.fillStyle = "#101014";
+    ctx.fillStyle = "#000";
     ctx.beginPath();
     ctx.roundRect(frame.left, frame.top, frame.width, frame.height, radius);
     ctx.fill();
