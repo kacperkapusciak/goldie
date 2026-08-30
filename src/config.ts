@@ -147,7 +147,26 @@ export type GoldieConfig = {
   appPath: string;
   bundleId: string;
   /** The .apk to install and its applicationId. Required when `devices` names an android key. */
-  android?: { appPath: string; applicationId: string };
+  android?: {
+    appPath: string;
+    applicationId: string;
+    /**
+     * Real bezel art for the android device, with its own geometry: the image
+     * (relative to the config), its pixel size, the transparent screen cutout
+     * inside it, and the cutout's corner radius. Android SDK emulator skins
+     * (`$ANDROID_HOME/skins/<device>/`) carry exactly this: `back.webp` is the
+     * frame and the `layout` file states the display rect and corner_radius;
+     * punch the display rect transparent and point this at the result. Without
+     * it the device renders the drawn generic bezel.
+     */
+    frame?: {
+      image: string;
+      width: number;
+      height: number;
+      screen: { x: number; y: number; width: number; height: number };
+      screenRadius: number;
+    };
+  };
   devices: DeviceKey[];
   locales: Locale[];
   /** Simulator appearance for every capture. */

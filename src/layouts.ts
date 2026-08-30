@@ -344,12 +344,21 @@ export type Composition = {
  */
 const REF_TILE_ASPECT = 1320 / 2868;
 
+/** Bezel art geometry: the image box, the screen cutout inside it, its corner radius. */
+export type FrameGeometry = {
+  width: number;
+  height: number;
+  screen: { x: number; y: number; width: number; height: number };
+  screenRadius: number;
+};
+
 export function compose(
   spec: LayoutSpec,
   tileIn: { width: number; height: number },
   theme: { copyHeightRatio: number; deviceWidthRatio: number },
-  opts: { screenOnly?: boolean } = {},
+  opts: { screenOnly?: boolean; geom?: FrameGeometry } = {},
 ): Composition {
+  const geom = opts.geom ?? FRAME;
   const tile =
     tileIn.width / tileIn.height > REF_TILE_ASPECT + 1e-6
       ? { width: tileIn.height * REF_TILE_ASPECT, height: tileIn.height }
@@ -358,8 +367,8 @@ export function compose(
   const width = tile.width * spec.span;
   const height = tile.height;
   const art = opts.screenOnly
-    ? { width: FRAME.screen.width, height: FRAME.screen.height, screen: { x: 0, y: 0 } }
-    : { width: FRAME.width, height: FRAME.height, screen: FRAME.screen };
+    ? { width: geom.screen.width, height: geom.screen.height, screen: { x: 0, y: 0 } }
+    : { width: geom.width, height: geom.height, screen: geom.screen };
 
   const isClassic = spec.key === "classic";
   const copyHeight =
@@ -418,9 +427,9 @@ export function compose(
       screen: {
         left: left + art.screen.x * scale,
         top: top + art.screen.y * scale,
-        width: FRAME.screen.width * scale,
-        height: FRAME.screen.height * scale,
-        radius: FRAME.screenRadius * scale,
+        width: geom.screen.width * scale,
+        height: geom.screen.height * scale,
+        radius: geom.screenRadius * scale,
       },
       rotate: d.rotate,
       capture: d.capture,

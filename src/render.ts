@@ -19,6 +19,7 @@ import {
 } from "./config.ts";
 import { exec, execOrThrow } from "./exec.ts";
 import { registerFonts } from "./fonts.ts";
+import { FRAME } from "./frame.ts";
 import { BADGE, type Composition, compose, SCREEN_SHADOW, TYPE } from "./layouts.ts";
 import { DEVICES, type DeviceKey, PREVIEW, SCREENSHOT_PIXEL_FORMAT } from "./specs.ts";
 
@@ -49,10 +50,19 @@ export async function renderScreenshots(cfg: LoadedConfig, deviceKey: DeviceKey,
     if (name.endsWith(".png")) await rm(join(outDir, name), { force: true });
   }
   // A device spec can force screen-only rendering, or a drawn generic bezel
-  // when no licensed bezel art exists for it (the android device).
+  // when no bezel art is bundled for it (the android device). Config-supplied
+  // frame art with its own geometry (cfg.android.frame) outranks the drawn one.
+  const customFrame = spec.platform === "android" ? cfg.android?.frame : undefined;
   const screenOnly = Boolean(cfg.theme.screenOnly || spec.screenOnly);
-  const drawnBezel = !screenOnly && spec.drawnBezel === true;
-  const bezel = screenOnly || drawnBezel ? null : await loadImage(framePath(cfg));
+  const drawnBezel = !screenOnly && !customFrame && spec.drawnBezel === true;
+  const bezel = screenOnly
+    ? null
+    : customFrame
+      ? await loadImage(resolve(cfg.root, customFrame.image))
+      : drawnBezel
+        ? null
+        : await loadImage(framePath(cfg));
+  const geom = customFrame ?? FRAME;
   registerFonts();
 
   const tile = spec.screenshot;
@@ -74,7 +84,7 @@ export async function renderScreenshots(cfg: LoadedConfig, deviceKey: DeviceKey,
   const files = await Promise.all(
     jobs.map(async ({ scene, layout, secondScene, first }) => {
       console.log(`  frame ${scene.id}`);
-      const c = compose(layout, tile, cfg.theme, { screenOnly });
+      const c = compose(layout, tile, cfg.theme, { screenOnly, geom });
 
       const canvas = createCanvas(c.width, c.height);
       const ctx = canvas.getContext("2d");
