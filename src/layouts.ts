@@ -389,22 +389,30 @@ export function compose(
     };
   }
 
+  // Copy composes in the reference column, but a device shrunk into it leaves
+  // dead margins on a wider tile. Devices there keep their real-tile size and
+  // slide DOWN until they clear the copy band, bleeding off the bottom the way
+  // dense 9:16 frames do; reference-aspect tiles skip both adjustments.
+  const squat = tile !== tileIn;
   const devices = spec.devices.map((d) => {
     const widthRatio = isClassic ? theme.deviceWidthRatio : d.widthRatio;
-    let scale = (tile.width * widthRatio) / art.width;
+    const deviceTile = squat && !d.fitBelowCopy ? tileIn : tile;
+    let scale = (deviceTile.width * widthRatio) / art.width;
     let left: number;
     let top: number;
     if (d.fitBelowCopy) {
       const bottomMargin = height * CLASSIC_BOTTOM_MARGIN;
       const available = height - copyHeight - bottomMargin;
       scale = Math.min(scale, available / art.height);
-      left = (width - art.width * scale) / 2;
+      left = (width - art.width * scale) / 2 + dx;
       top = copyHeight + (available - art.height * scale) / 2;
     } else {
-      left = width * d.x - (art.width * scale) / 2;
+      left = tileIn.width * spec.span * d.x - (art.width * scale) / 2;
       top = height * d.y - (art.height * scale) / 2;
+      if (squat && copy && spec.copy.position === "top") {
+        top = Math.max(top, copy.box.height + height * 0.015);
+      }
     }
-    left += dx;
     return {
       frame: { left, top, width: art.width * scale, height: art.height * scale },
       screen: {
