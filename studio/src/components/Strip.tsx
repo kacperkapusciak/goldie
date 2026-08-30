@@ -643,6 +643,8 @@ function ScreenshotScene({
 }) {
   const c = compose(spec, tile, theme, { screenOnly });
   const { w, h } = cq(tile);
+  // Wider-than-reference tiles compose at a narrower design width; type follows it.
+  const typeScale = c.designWidth / tile.width;
   const editable = onEdit ? editableProps : () => ({});
   const copy = c.copy;
   return (
@@ -683,10 +685,10 @@ function ScreenshotScene({
               style={{
                 margin: 0,
                 color: headlineColor,
-                fontSize: `${TYPE.headlineSize * 100}cqw`,
+                fontSize: `${TYPE.headlineSize * typeScale * 100}cqw`,
                 lineHeight: TYPE.headlineLineHeight,
                 fontWeight: TYPE.headlineWeight,
-                letterSpacing: `${TYPE.headlineTracking * 100}cqw`,
+                letterSpacing: `${TYPE.headlineTracking * typeScale * 100}cqw`,
               }}
               {...editable((text) => onEdit?.("headline", text), headline, "Headline")}
             >
@@ -697,7 +699,7 @@ function ScreenshotScene({
                 style={{
                   margin: 0,
                   color: subheadColor,
-                  fontSize: `${TYPE.subheadSize * 100}cqw`,
+                  fontSize: `${TYPE.subheadSize * typeScale * 100}cqw`,
                   lineHeight: TYPE.subheadLineHeight,
                   fontWeight: TYPE.subheadWeight,
                   minWidth: "30cqw",

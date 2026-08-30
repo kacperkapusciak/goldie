@@ -30,6 +30,8 @@ export type DeviceSpec = {
   preview: { width: number; height: number } | null;
   /** Render bare screens with the drop shadow instead of a bezel. */
   screenOnly?: true;
+  /** Render a drawn generic bezel: no licensed bezel art exists for this device. */
+  drawnBezel?: true;
 };
 
 export const DEVICES: Record<DeviceKey, DeviceSpec> = {
@@ -41,15 +43,15 @@ export const DEVICES: Record<DeviceKey, DeviceSpec> = {
     screenshot: { width: 1320, height: 2868 },
     preview: { width: 886, height: 1920 },
   },
-  // No bundled Pixel bezel art (device-art licensing), so android renders
-  // screen-only regardless of the config's frame choice.
+  // No bundled Pixel bezel art (device-art licensing), so android renders a
+  // drawn generic bezel regardless of the config's frame choice.
   "android-phone": {
     label: "play-phone",
     platform: "android",
     native: null,
     screenshot: { width: 1080, height: 1920 },
     preview: null,
-    screenOnly: true,
+    drawnBezel: true,
   },
 };
 

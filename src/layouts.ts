@@ -311,6 +311,8 @@ export type Composition = {
   /** span × tile width, and the tile height. */
   width: number;
   height: number;
+  /** Width the geometry was composed at; size type and shadows from this, not the tile. */
+  designWidth: number;
   copy: {
     position: "top" | "bottom";
     align: CopyAlign;
@@ -334,12 +336,25 @@ export type Composition = {
  * Pixel geometry for a layout on a tile of the given size. `screenOnly`
  * drops the bezel: the device box becomes the bare screen cutout.
  */
+/**
+ * Every layout fraction was tuned on the App Store 6.9" tile (1320x2868). A
+ * wider tile (Google Play's 9:16) would let width-driven device sizing climb
+ * into the copy block, so composition happens in this reference aspect and the
+ * column centres in the tile; reference-aspect tiles pass through unchanged.
+ */
+const REF_TILE_ASPECT = 1320 / 2868;
+
 export function compose(
   spec: LayoutSpec,
-  tile: { width: number; height: number },
+  tileIn: { width: number; height: number },
   theme: { copyHeightRatio: number; deviceWidthRatio: number },
   opts: { screenOnly?: boolean } = {},
 ): Composition {
+  const tile =
+    tileIn.width / tileIn.height > REF_TILE_ASPECT + 1e-6
+      ? { width: tileIn.height * REF_TILE_ASPECT, height: tileIn.height }
+      : tileIn;
+  const dx = (spec.span * (tileIn.width - tile.width)) / 2;
   const width = tile.width * spec.span;
   const height = tile.height;
   const art = opts.screenOnly
@@ -367,10 +382,10 @@ export function compose(
     copy = {
       position: spec.copy.position,
       align: spec.copy.align,
-      x,
+      x: x + dx,
       y: spec.copy.position === "top" ? height * TYPE.padTop : height - height * TYPE.padBottom,
       maxWidth,
-      box: { left: boxLeft, top, width: maxWidth, height: copyHeight },
+      box: { left: boxLeft + dx, top, width: maxWidth, height: copyHeight },
     };
   }
 
@@ -389,6 +404,7 @@ export function compose(
       left = width * d.x - (art.width * scale) / 2;
       top = height * d.y - (art.height * scale) / 2;
     }
+    left += dx;
     return {
       frame: { left, top, width: art.width * scale, height: art.height * scale },
       screen: {
@@ -403,7 +419,7 @@ export function compose(
     };
   });
 
-  return { width, height, copy, devices };
+  return { width: tileIn.width * spec.span, height, copy, devices, designWidth: tile.width };
 }
 
 /** Whether a layout draws a second capture, which needs the scene's `secondScene`. */

@@ -48,9 +48,11 @@ export async function renderScreenshots(cfg: LoadedConfig, deviceKey: DeviceKey,
   for (const name of await readdir(outDir)) {
     if (name.endsWith(".png")) await rm(join(outDir, name), { force: true });
   }
-  // A device spec can force screen-only rendering (no bezel art exists for it).
+  // A device spec can force screen-only rendering, or a drawn generic bezel
+  // when no licensed bezel art exists for it (the android device).
   const screenOnly = Boolean(cfg.theme.screenOnly || spec.screenOnly);
-  const bezel = screenOnly ? null : await loadImage(framePath(cfg));
+  const drawnBezel = !screenOnly && spec.drawnBezel === true;
+  const bezel = screenOnly || drawnBezel ? null : await loadImage(framePath(cfg));
   registerFonts();
 
   const tile = spec.screenshot;
@@ -84,7 +86,7 @@ export async function renderScreenshots(cfg: LoadedConfig, deviceKey: DeviceKey,
       }
 
       if (c.copy) {
-        drawCopy(ctx, c.copy, tile, cfg.theme, {
+        drawCopy(ctx, c.copy, { width: c.designWidth, height: c.height }, cfg.theme, {
           headline: pick(scene.headline, locale, scene.id, "headline"),
           subhead: scene.subhead ? pick(scene.subhead, locale, scene.id, "subhead") : undefined,
         });
@@ -103,7 +105,7 @@ export async function renderScreenshots(cfg: LoadedConfig, deviceKey: DeviceKey,
       for (const device of c.devices) {
         const sceneId = device.capture === "secondary" ? secondScene! : scene.id;
         const capture = await loadImage(findShot(sceneId).file);
-        drawDevice(ctx, device, capture, bezel, tile);
+        drawDevice(ctx, device, capture, bezel, { width: c.designWidth }, drawnBezel);
       }
 
       const out: string[] = [];
@@ -204,6 +206,7 @@ function drawDevice(
   capture: Image,
   bezel: Image | null,
   tile: { width: number },
+  drawnBezel = false,
 ) {
   const { frame, screen } = device;
   ctx.save();
@@ -214,7 +217,27 @@ function drawDevice(
     ctx.rotate((device.rotate * Math.PI) / 180);
     ctx.translate(-cx, -cy);
   }
-  if (!bezel) {
+  if (!bezel && drawnBezel) {
+    // Generic drawn bezel: the bezel PNGs' frame box filled as a dark ring
+    // around the screen cutout, so android tiles share the iOS proportions
+    // without shipping licensed device art.
+    const ring = screen.left - frame.left;
+    const radius = screen.radius + ring;
+    ctx.save();
+    ctx.shadowColor = SCREEN_SHADOW.color;
+    ctx.shadowBlur = tile.width * SCREEN_SHADOW.blur;
+    ctx.shadowOffsetY = tile.width * SCREEN_SHADOW.offsetY;
+    ctx.fillStyle = "#101014";
+    ctx.beginPath();
+    ctx.roundRect(frame.left, frame.top, frame.width, frame.height, radius);
+    ctx.fill();
+    ctx.restore();
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.14)";
+    ctx.lineWidth = Math.max(1, ring * 0.12);
+    ctx.beginPath();
+    ctx.roundRect(frame.left, frame.top, frame.width, frame.height, radius);
+    ctx.stroke();
+  } else if (!bezel) {
     ctx.save();
     ctx.shadowColor = SCREEN_SHADOW.color;
     ctx.shadowBlur = tile.width * SCREEN_SHADOW.blur;
