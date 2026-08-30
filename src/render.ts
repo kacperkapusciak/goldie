@@ -264,6 +264,20 @@ function drawDevice(
   );
   ctx.restore();
   if (bezel) ctx.drawImage(bezel, frame.left, frame.top, frame.width, frame.height);
+  if (!bezel && drawnBezel) {
+    // Punch-hole camera over the status bar area, centred where Pixel-class
+    // phones carry it; drawn after the content so it reads as hardware.
+    const ring = screen.left - frame.left;
+    const r = ring * 0.9;
+    ctx.fillStyle = "#050507";
+    ctx.beginPath();
+    ctx.arc(screen.left + screen.width / 2, screen.top + ring * 2.4, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "rgba(70, 80, 110, 0.55)";
+    ctx.beginPath();
+    ctx.arc(screen.left + screen.width / 2, screen.top + ring * 2.4, r * 0.45, 0, Math.PI * 2);
+    ctx.fill();
+  }
   ctx.restore();
 }
 
