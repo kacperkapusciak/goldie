@@ -197,7 +197,7 @@ function Loaded({ manifest, saved }: { manifest: StoreManifest; saved: SavedDesi
       />
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <main className="relative grid flex-1 place-items-center overflow-auto p-10">
+        <main className="relative grid min-h-0 flex-1 items-safe-center overflow-auto p-10">
           {spec && captures ? (
             <div className="w-full max-w-[1400px]">
               <Strip
