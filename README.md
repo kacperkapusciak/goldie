@@ -93,7 +93,8 @@ second window does not apply to it.
 https://github.com/user-attachments/assets/d6171a90-8fc1-437b-a574-5a8547068a3c
 
 The studio switches devices, backgrounds, templates, bezel, fonts and
-per-tile copy. It saves the choices to `goldie.design.json`, so the CLI
+per-tile copy, including an optional accent phrase in each headline. It saves
+the choices to `goldie.design.json`, so the CLI
 renders the same result. The config also takes:
 
 - `frame`: `17-pro-blue`, `17-pro-silver`, `17-pro-orange`, or a custom
@@ -104,6 +105,8 @@ renders the same result. The config also takes:
   `panorama-duo`, `minimal`.
 - `theme.fontFamily`: a CSS font stack. Merriweather, DM Mono, Lato, DM Sans,
   Montserrat and Noto Sans SC (Simplified Chinese) are bundled.
+- `theme.accentColor` and `scenes[].headlineEmphasis`: color the first matching
+  phrase in a localized headline without adding rich-text markup.
 - `decorations`: badges or images layered behind the device.
 
 ## Remarks

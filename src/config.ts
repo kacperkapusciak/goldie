@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { findEmphasis } from "./copy.ts";
 import { ANDROID_FRAME, FRAME } from "./frame.ts";
 import {
   type FrameGeometry,
@@ -29,6 +30,8 @@ export type ScreenshotScene = {
   flow: string;
   /** Headline per locale. */
   headline: Record<Locale, string>;
+  /** First matching phrase in the headline to draw with the theme accent color. */
+  headlineEmphasis?: Record<Locale, string>;
   subhead?: Record<Locale, string>;
   /** Overrides the theme background for this scene. */
   background?: string;
@@ -96,6 +99,8 @@ export type Scene = ScreenshotScene | PreviewScene;
 export type Theme = {
   background: string;
   headlineColor: string;
+  /** Color of a scene's headlineEmphasis phrase. Defaults to headlineColor. */
+  accentColor?: string;
   subheadColor: string;
   fontFamily: string;
   /** Fraction of the screenshot height reserved for copy above the device. */
@@ -247,6 +252,7 @@ export async function loadConfig(path = defaultConfigPath()): Promise<LoadedConf
   applyDesign(loaded, readDesign(path));
   framePath(loaded); // fail at load time on a bad variant or missing bezel PNG
   validateLayouts(loaded);
+  validateEmphasis(loaded);
   return loaded;
 }
 
@@ -275,6 +281,7 @@ export type DesignOverrides = {
 
 export type SceneCopy = {
   headline?: Record<string, string>;
+  headlineEmphasis?: Record<string, string>;
   subhead?: Record<string, string>;
 };
 
@@ -325,6 +332,9 @@ export function applyDesign(cfg: LoadedConfig, design: DesignOverrides): void {
       const copy = design.copy[scene.id];
       if (!isScreenshot(scene) || !copy) continue;
       if (copy.headline) scene.headline = { ...scene.headline, ...copy.headline };
+      if (copy.headlineEmphasis) {
+        scene.headlineEmphasis = { ...scene.headlineEmphasis, ...copy.headlineEmphasis };
+      }
       if (copy.subhead) scene.subhead = { ...scene.subhead, ...copy.subhead };
     }
   }
@@ -389,6 +399,26 @@ export function validateLayouts(cfg: LoadedConfig): void {
       throw new Error(
         `Scene "${scene.id}": secondScene "${secondScene}" is not another screenshot scene.`,
       );
+    }
+  }
+}
+
+/** Rejects accent phrases that would silently render as plain headline text. */
+export function validateEmphasis(cfg: LoadedConfig): void {
+  for (const scene of cfg.scenes.filter(isScreenshot)) {
+    for (const [locale, phrase] of Object.entries(scene.headlineEmphasis ?? {})) {
+      if (!phrase.trim()) continue;
+      if (/[\r\n]/.test(phrase)) {
+        throw new Error(
+          `Scene "${scene.id}" headlineEmphasis for "${locale}" must be one phrase without a line break.`,
+        );
+      }
+      const headline = scene.headline[locale];
+      if (!headline || !findEmphasis(headline, phrase)) {
+        throw new Error(
+          `Scene "${scene.id}" headlineEmphasis for "${locale}" is not in its headline.`,
+        );
+      }
     }
   }
 }

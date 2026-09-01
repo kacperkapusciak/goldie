@@ -3,6 +3,7 @@
 export type Theme = {
   background: string;
   headlineColor: string;
+  accentColor?: string;
   subheadColor: string;
   fontFamily: string;
   /** Fraction of the frame height reserved for copy above the device. */
@@ -47,6 +48,7 @@ export type DeviceEntry = {
 export type DesignScene = {
   id: string;
   headline: Record<string, string>;
+  headlineEmphasis?: Record<string, string>;
   subhead?: Record<string, string>;
   layout?: string;
   secondScene?: string;
@@ -165,6 +167,7 @@ export type SavedDesign = {
 
 export type SceneCopy = {
   headline?: Record<string, string>;
+  headlineEmphasis?: Record<string, string>;
   subhead?: Record<string, string>;
 };
 

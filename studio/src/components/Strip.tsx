@@ -3,6 +3,7 @@ import { AnimatePresence, Reorder } from "motion/react";
 import type React from "react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
+import { findEmphasis } from "../../../src/copy";
 import {
   BADGE,
   type Composition,
@@ -27,6 +28,7 @@ import type {
 import { CHECKERBOARD, layoutOptions, TRANSPARENT } from "./DesignPanel";
 import { Select } from "./Sidebar";
 import { Button } from "./ui/button";
+import { Input } from "./ui/input";
 
 /** Tiles shown at once; the App Store product page shows this many before scrolling. */
 const PAGE_SIZE = 5;
@@ -97,7 +99,11 @@ export function Strip({
   frameUrl: string;
   fontFamily: string;
   copy: Record<string, SceneCopy>;
-  onCopy: (sceneId: string, field: "headline" | "subhead", text: string) => void;
+  onCopy: (
+    sceneId: string,
+    field: "headline" | "headlineEmphasis" | "subhead",
+    text: string,
+  ) => void;
   /** Screenshot scene ids in display order; empty means the config's order. */
   order: string[];
   onReorder: (order: string[]) => void;
@@ -156,6 +162,7 @@ export function Strip({
     : light && lightColor(theme.subheadColor)
       ? "#5A6A7D"
       : theme.subheadColor;
+  const accentColor = theme.accentColor ?? headlineColor;
 
   const allShots = scenes.flatMap((scene) => {
     const capture = captures.screenshots.find((s) => s.sceneId === scene.id);
@@ -203,6 +210,11 @@ export function Strip({
       defaultKey: string;
       onChange: (key: string | undefined) => void;
     };
+    emphasis?: {
+      value: string;
+      valid: boolean;
+      onChange: (value: string) => void;
+    };
   };
   const entries: Entry[] = [];
   if (segments.length > 0 && tileSpec.preview) {
@@ -229,6 +241,14 @@ export function Strip({
       defaultKey: defaultLayoutOf(scene),
       onChange: (key: string | undefined) => onSceneLayout(scene.id, key),
     };
+    const headline = copy[scene.id]?.headline?.[locale] ?? scene.headline[locale] ?? "";
+    const headlineEmphasis =
+      copy[scene.id]?.headlineEmphasis?.[locale] ?? scene.headlineEmphasis?.[locale] ?? "";
+    const emphasisControl = {
+      value: headlineEmphasis,
+      valid: !headlineEmphasis.trim() || Boolean(findEmphasis(headline, headlineEmphasis)),
+      onChange: (value: string) => onCopy(scene.id, "headlineEmphasis", value),
+    };
     for (let slice = 0; slice < spec.span; slice++) {
       entries.push({
         key: spec.span > 1 ? `${scene.id}#${slice + 1}` : scene.id,
@@ -239,6 +259,7 @@ export function Strip({
         // Only the first slice drags; the second follows it.
         sceneId: slice === 0 ? scene.id : undefined,
         layout: layoutControl,
+        emphasis: emphasisControl,
         scene: (editable) => (
           <ScreenshotScene
             spec={spec}
@@ -250,9 +271,11 @@ export function Strip({
             frameUrl={deviceFrameUrl}
             geom={geom}
             fontFamily={fontFamily}
-            headline={copy[scene.id]?.headline?.[locale] ?? scene.headline[locale] ?? ""}
+            headline={headline}
+            headlineEmphasis={headlineEmphasis}
             subhead={copy[scene.id]?.subhead?.[locale] ?? scene.subhead?.[locale]}
             headlineColor={headlineColor}
+            accentColor={accentColor}
             subheadColor={subheadColor}
             captureUrl={capture.url}
             secondCaptureUrl={second?.url}
@@ -489,6 +512,11 @@ function Lightbox({
       defaultKey: string;
       onChange: (key: string | undefined) => void;
     };
+    emphasis?: {
+      value: string;
+      valid: boolean;
+      onChange: (value: string) => void;
+    };
   };
   layouts: Design["layouts"];
   index: number;
@@ -550,6 +578,21 @@ function Lightbox({
               ]}
             />
           </div>
+        ) : null}
+        {entry.emphasis ? (
+          <label htmlFor="headline-emphasis" className="dark grid w-56 gap-1 text-foreground">
+            <span className="font-medium text-neutral-300">Accent phrase</span>
+            <Input
+              id="headline-emphasis"
+              value={entry.emphasis.value}
+              aria-invalid={!entry.emphasis.valid}
+              placeholder="Exact phrase from headline"
+              onChange={(event) => entry.emphasis?.onChange(event.target.value)}
+            />
+            {!entry.emphasis.valid ? (
+              <span className="text-destructive">Phrase must occur in the headline.</span>
+            ) : null}
+          </label>
         ) : null}
       </div>
 
@@ -670,8 +713,10 @@ function ScreenshotScene({
   geom,
   fontFamily,
   headline,
+  headlineEmphasis,
   subhead,
   headlineColor,
+  accentColor,
   subheadColor,
   captureUrl,
   secondCaptureUrl,
@@ -691,8 +736,10 @@ function ScreenshotScene({
   geom: FrameGeometry | undefined;
   fontFamily: string;
   headline: string;
+  headlineEmphasis: string;
   subhead: string | undefined;
   headlineColor: string;
+  accentColor: string;
   subheadColor: string;
   captureUrl: string;
   secondCaptureUrl: string | undefined;
@@ -752,7 +799,7 @@ function ScreenshotScene({
               }}
               {...editable((text) => onEdit?.("headline", text), headline, "Headline")}
             >
-              {headline}
+              <EmphasizedText text={headline} phrase={headlineEmphasis} color={accentColor} />
             </h1>
             {subhead || onEdit ? (
               <p
@@ -957,6 +1004,18 @@ function editableProps(commit: (text: string) => void, current: string, label: s
       }
     },
   };
+}
+
+function EmphasizedText({ text, phrase, color }: { text: string; phrase: string; color: string }) {
+  const range = findEmphasis(text, phrase);
+  if (!range) return text;
+  return (
+    <>
+      {text.slice(0, range.start)}
+      <span style={{ color }}>{text.slice(range.start, range.end)}</span>
+      {text.slice(range.end)}
+    </>
+  );
 }
 
 /**

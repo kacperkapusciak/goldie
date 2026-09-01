@@ -17,6 +17,7 @@ import {
   resolvedScenes,
   type Theme,
 } from "./config.ts";
+import { findEmphasis } from "./copy.ts";
 import { exec, execOrThrow } from "./exec.ts";
 import { registerFonts, withGlyphFallback } from "./fonts.ts";
 import { BADGE, type Composition, compose, SCREEN_SHADOW, TYPE } from "./layouts.ts";
@@ -93,6 +94,7 @@ export async function renderScreenshots(cfg: LoadedConfig, deviceKey: DeviceKey,
       if (c.copy) {
         drawCopy(ctx, c.copy, { width: c.designWidth, height: c.height }, cfg.theme, {
           headline: pick(scene.headline, locale, scene.id, "headline"),
+          headlineEmphasis: scene.headlineEmphasis?.[locale],
           subhead: scene.subhead ? pick(scene.subhead, locale, scene.id, "subhead") : undefined,
         });
       }
@@ -166,7 +168,7 @@ function drawCopy(
   copy: NonNullable<Composition["copy"]>,
   tile: { width: number; height: number },
   theme: Theme,
-  text: { headline: string; subhead?: string },
+  text: { headline: string; headlineEmphasis?: string; subhead?: string },
 ) {
   const family = withGlyphFallback(theme.fontFamily);
   const blocks = [
@@ -174,6 +176,8 @@ function drawCopy(
       text: text.headline,
       font: `${TYPE.headlineWeight} ${tile.width * TYPE.headlineSize}px ${family}`,
       color: theme.headlineColor,
+      accentColor: theme.accentColor ?? theme.headlineColor,
+      emphasis: text.headlineEmphasis,
       lineHeight: TYPE.headlineLineHeight,
       letterSpacing: tile.width * TYPE.headlineTracking,
     },
@@ -183,12 +187,17 @@ function drawCopy(
             text: text.subhead,
             font: `${TYPE.subheadWeight} ${tile.width * TYPE.subheadSize}px ${family}`,
             color: theme.subheadColor,
+            accentColor: theme.subheadColor,
+            emphasis: undefined,
             lineHeight: TYPE.subheadLineHeight,
             letterSpacing: 0,
           },
         ]
       : []),
-  ].map((b) => ({ ...b, lines: wrapLines(ctx, b.text, b.font, b.letterSpacing, copy.maxWidth) }));
+  ].map((b) => ({
+    ...b,
+    lines: wrapStyledLines(ctx, b.text, b.font, b.letterSpacing, copy.maxWidth, b.emphasis),
+  }));
 
   const gap = tile.height * TYPE.gap;
   const total =
@@ -310,13 +319,77 @@ const segmenter = new Intl.Segmenter(undefined, { granularity: "word" });
  * spaces), so segmentation finds the word boundaries instead. Whitespace and
  * punctuation glue to the preceding unit, so a line never starts with them.
  */
-function breakableUnits(paragraph: string): string[] {
-  const units: string[] = [];
+type BreakableUnit = { text: string; start: number; end: number };
+type StyledLine = { text: string; emphasis: { start: number; end: number } | null };
+
+function breakableUnits(paragraph: string): BreakableUnit[] {
+  const units: BreakableUnit[] = [];
   for (const s of segmenter.segment(paragraph)) {
-    if (s.isWordLike || units.length === 0) units.push(s.segment);
-    else units[units.length - 1] += s.segment;
+    if (s.isWordLike || units.length === 0) {
+      units.push({ text: s.segment, start: s.index, end: s.index + s.segment.length });
+    } else {
+      const last = units[units.length - 1]!;
+      last.text += s.segment;
+      last.end += s.segment.length;
+    }
   }
   return units;
+}
+
+/** Word-wraps text and marks the accent range on every line it crosses. */
+export function wrapStyledLines(
+  ctx: SKRSContext2D,
+  text: string,
+  font: string,
+  letterSpacing: number,
+  maxWidth: number,
+  emphasis?: string,
+): StyledLine[] {
+  ctx.font = font;
+  ctx.letterSpacing = `${letterSpacing}px`;
+  const lines: StyledLine[] = [];
+  let matched = false;
+
+  for (const rawParagraph of text.split("\n")) {
+    const paragraph = rawParagraph.replace(/\s+/g, " ").trim();
+    const phrase = matched ? null : findEmphasis(paragraph, emphasis);
+    if (phrase) matched = true;
+    let line: BreakableUnit[] = [];
+
+    const pushLine = () => {
+      if (line.length === 0) {
+        lines.push({ text: "", emphasis: null });
+        return;
+      }
+      const start = line[0]!.start;
+      const value = line
+        .map((unit) => unit.text)
+        .join("")
+        .trimEnd();
+      const end = start + value.length;
+      const from = phrase ? Math.max(start, phrase.start) : 0;
+      const to = phrase ? Math.min(end, phrase.end) : 0;
+      lines.push({
+        text: value,
+        emphasis: from < to ? { start: from - start, end: to - start } : null,
+      });
+    };
+
+    for (const unit of breakableUnits(paragraph)) {
+      const next = [...line, unit]
+        .map((part) => part.text)
+        .join("")
+        .trimEnd();
+      if (line.length > 0 && ctx.measureText(next).width > maxWidth) {
+        pushLine();
+        line = [unit];
+      } else {
+        line.push(unit);
+      }
+    }
+    pushLine();
+  }
+  return lines;
 }
 
 /** Word-wraps text to `maxWidth`, honouring explicit newlines. */
@@ -327,32 +400,17 @@ export function wrapLines(
   letterSpacing: number,
   maxWidth: number,
 ): string[] {
-  ctx.font = font;
-  ctx.letterSpacing = `${letterSpacing}px`;
-  const lines: string[] = [];
-  for (const paragraph of text.split("\n")) {
-    let line = "";
-    for (const unit of breakableUnits(paragraph.replace(/\s+/g, " ").trim())) {
-      const next = line + unit;
-      if (line && ctx.measureText(next.trimEnd()).width > maxWidth) {
-        lines.push(line.trimEnd());
-        line = unit;
-      } else {
-        line = next;
-      }
-    }
-    lines.push(line.trimEnd());
-  }
-  return lines;
+  return wrapStyledLines(ctx, text, font, letterSpacing, maxWidth).map((line) => line.text);
 }
 
 /** Draws wrapped lines from `y` down. Returns the y below the last line. */
 function drawLines(
   ctx: SKRSContext2D,
   o: {
-    lines: string[];
+    lines: StyledLine[];
     font: string;
     color: string;
+    accentColor: string;
     lineHeight: number;
     letterSpacing: number;
     x: number;
@@ -370,7 +428,29 @@ function drawLines(
   let y = o.y;
   for (const line of o.lines) {
     // Centre the glyph box inside the line box, as CSS line-height does.
-    ctx.fillText(line, o.x, y + (step - size) / 2);
+    const top = y + (step - size) / 2;
+    if (!line.emphasis) {
+      ctx.fillStyle = o.color;
+      ctx.textAlign = o.align;
+      ctx.fillText(line.text, o.x, top);
+    } else {
+      const before = line.text.slice(0, line.emphasis.start);
+      const accent = line.text.slice(line.emphasis.start, line.emphasis.end);
+      const after = line.text.slice(line.emphasis.end);
+      const left = o.align === "center" ? o.x - ctx.measureText(line.text).width / 2 : o.x;
+      ctx.textAlign = "left";
+      let x = left;
+      for (const [value, color] of [
+        [before, o.color],
+        [accent, o.accentColor],
+        [after, o.color],
+      ] as const) {
+        if (!value) continue;
+        ctx.fillStyle = color;
+        ctx.fillText(value, x, top);
+        x += ctx.measureText(value).width;
+      }
+    }
     y += step;
   }
   return y;

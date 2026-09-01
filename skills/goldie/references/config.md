@@ -38,6 +38,7 @@ const config: GoldieConfig = {
     // "transparent" exports PNGs with alpha (for compositing; not uploadable as-is).
     background: "linear-gradient(160deg, #E8F1FF 0%, #F7FAFF 55%, #FFFFFF 100%)",
     headlineColor: "#0E1B2A",    // must contrast with the background;
+    accentColor: "#3267E3",      // optional scenes[].headlineEmphasis color
     subheadColor: "#5A6A7D",     // light text on a dark background and vice versa
     // The system stack, or a bundled typeface named first: "Merriweather",
     // "DM Mono", "Lato", "DM Sans", "Montserrat" (files in $GOLDIE/assets/fonts).
@@ -74,6 +75,7 @@ const config: GoldieConfig = {
       id: "issues",
       flow: "store-01-issues",
       headline: { "en-US": "Every issue, one list" },
+      headlineEmphasis: { "en-US": "one list" }, // optional, first matching phrase
       subhead: { "en-US": "Grouped by status, sorted the way your team works." },
       // background: "..."     optional per-scene override
       // layout: "hero",        optional per-scene layout
@@ -160,6 +162,10 @@ applies to every tile, `scenes[].decorations` to one; both stack.
 
 - **Headlines**: 2 to 5 words, benefit-led, sentence case. Name what the user
   gets ("Find anything, fast"), never what the UI is ("Search screen").
+- **Headline emphasis**: optional. Set `headlineEmphasis` per locale to one
+  exact phrase from that locale's headline, and set `theme.accentColor`. Goldie
+  colors the first case-insensitive match, carries it across automatic wrapping,
+  and rejects an unmatched phrase or one with an explicit line break.
 - **Subheads**: one short sentence expanding the headline. Optional; drop it
   when the headline stands alone.
 - **Badges**: two or three words at most ("Editors' Choice", "New in 2.0").

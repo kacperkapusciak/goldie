@@ -260,7 +260,7 @@ the next prompt can build on it.
 
 | The user asks for | Edit | Then run |
 |---|---|---|
-| Different headline, subhead or store copy | `scenes[].headline` / `subhead`, `store.*` | `frame`, `manifest` |
+| Different headline, accent phrase, subhead or store copy | `scenes[].headline` / `headlineEmphasis` / `subhead`, `theme.accentColor`, `store.*` | `frame`, `manifest` |
 | A new look: background, text colors, font, sizing | `theme.*`, or `scenes[].background` for one tile | `frame`, `manifest` |
 | A different bezel, or no bezel | `frame.variant`, `theme.screenOnly` | `frame`, `manifest` |
 | A varied strip: panorama opener, hero, tilted tiles, a breather | `theme.template`: a built-in key or a sequence of layout keys (see `references/config.md`) | `frame`, `manifest` |
@@ -288,4 +288,3 @@ value into `theme.background`, `frame.variant`, `theme.fontFamily`,
 starts from what they see. The
 current on-disk values are also in `goldie/out/web/store.json` under `design`,
 which is the fastest way to confirm what the studio is showing right now.
-

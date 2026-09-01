@@ -40,6 +40,7 @@ const config: GoldieConfig = {
   theme: {
     background: "linear-gradient(160deg, #E8F1FF 0%, #F7FAFF 55%, #FFFFFF 100%)",
     headlineColor: "#0E1B2A",
+    accentColor: "#3267E3", // optional color for scenes[].headlineEmphasis
     subheadColor: "#5A6A7D",
     // System stack, or a bundled typeface first: "Merriweather", "DM Mono",
     // "Lato", "DM Sans", "Montserrat" (see src/fonts.ts).
@@ -80,6 +81,7 @@ const config: GoldieConfig = {
       id: "home",
       flow: "store-01-home",
       headline: { "en-US": "Benefit-led headline" },
+      // headlineEmphasis: { "en-US": "Benefit-led" }, // first case-insensitive match
       subhead: { "en-US": "One short sentence expanding the headline." },
       // layout: "hero",             this tile only
       // secondScene: "detail",      the second screen of a duo / panorama-duo layout

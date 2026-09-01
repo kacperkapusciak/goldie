@@ -86,6 +86,7 @@ export type StoreManifest = {
     scenes: Array<{
       id: string;
       headline: Record<string, string>;
+      headlineEmphasis?: Record<string, string>;
       subhead?: Record<string, string>;
       layout?: string;
       secondScene?: string;
@@ -184,6 +185,7 @@ export async function writeManifest(cfg: LoadedConfig): Promise<string> {
     scenes.push({
       id: scene.id,
       headline: scene.headline,
+      ...(scene.headlineEmphasis ? { headlineEmphasis: scene.headlineEmphasis } : {}),
       ...(scene.subhead ? { subhead: scene.subhead } : {}),
       ...(scene.layout ? { layout: scene.layout } : {}),
       ...(scene.secondScene ? { secondScene: scene.secondScene } : {}),
