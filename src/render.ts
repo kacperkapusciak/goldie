@@ -17,7 +17,7 @@ import {
   resolvedScenes,
   type Theme,
 } from "./config.ts";
-import { exec, execOrThrow } from "./exec.ts";
+import { execOrThrow } from "./exec.ts";
 import { registerFonts, withGlyphFallback } from "./fonts.ts";
 import { BADGE, type Composition, compose, SCREEN_SHADOW, TYPE } from "./layouts.ts";
 import { DEVICES, type DeviceKey, PREVIEW, SCREENSHOT_PIXEL_FORMAT } from "./specs.ts";
@@ -68,16 +68,10 @@ export async function renderScreenshots(cfg: LoadedConfig, deviceKey: DeviceKey,
     return shot;
   };
 
-  // Output numbers count tiles, so a panorama takes two consecutive slots.
-  let slot = 0;
-  const jobs = resolvedScenes(cfg).map((r) => {
-    const first = slot;
-    slot += r.layout.span;
-    return { ...r, first };
-  });
+  const jobs = screenshotJobs(resolvedScenes(cfg));
 
   const files = await Promise.all(
-    jobs.map(async ({ scene, layout, secondScene, first }) => {
+    jobs.map(async ({ scene, layout, secondScene, names }) => {
       console.log(`  frame ${scene.id}`);
       const c = compose(layout, tile, cfg.theme, { screenOnly, geom });
 
@@ -117,14 +111,51 @@ export async function renderScreenshots(cfg: LoadedConfig, deviceKey: DeviceKey,
       for (let i = 0; i < layout.span; i++) {
         const slice = createCanvas(tile.width, tile.height);
         slice.getContext("2d").drawImage(canvas, -i * tile.width, 0);
-        const suffix = layout.span > 1 ? `-${i + 1}` : "";
-        const name = `${String(first + i + 1).padStart(2, "0")}-${scene.id}${suffix}.png`;
-        out.push(await writePng(slice, outDir, name, transparent));
+        out.push(await writePng(slice, outDir, names[i]!, transparent));
       }
       return out;
     }),
   );
   return files.flat();
+}
+
+/**
+ * Assigns the final Store slots and filenames to resolved scenes. Rendering
+ * and verification share this list so a valid export cannot omit, rename or
+ * retain a screenshot without being noticed.
+ */
+export function screenshotJobs(scenes: ReturnType<typeof resolvedScenes>) {
+  let slot = 0;
+  return scenes.map((scene) => {
+    const first = slot;
+    slot += scene.layout.span;
+    const names = Array.from({ length: scene.layout.span }, (_, i) => {
+      const suffix = scene.layout.span > 1 ? `-${i + 1}` : "";
+      return `${String(first + i + 1).padStart(2, "0")}-${scene.scene.id}${suffix}.png`;
+    });
+    return { ...scene, first, names };
+  });
+}
+
+export function compareFileSets(expected: string[], actual: string[]) {
+  const expectedSet = new Set(expected);
+  const actualSet = new Set(actual);
+  return {
+    missing: expected.filter((file) => !actualSet.has(file)),
+    extra: actual.filter((file) => !expectedSet.has(file)),
+  };
+}
+
+async function filesWithExtension(dir: string, extension: string): Promise<string[]> {
+  try {
+    return (await readdir(dir, { withFileTypes: true }))
+      .filter((entry) => entry.isFile() && entry.name.endsWith(extension))
+      .map((entry) => entry.name)
+      .sort();
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") return [];
+    throw err;
+  }
 }
 
 /**
@@ -570,8 +601,19 @@ export async function verify(
   let ok = true;
 
   const shotDir = join(cfg.outDir, "screenshots", deviceKey, locale);
-  const shots = await exec("sh", ["-c", `ls ${shotDir}/*.png 2>/dev/null`], { quiet: true });
-  for (const file of shots.stdout.split("\n").filter(Boolean)) {
+  const expectedShots = screenshotJobs(resolvedScenes(cfg)).flatMap((job) => job.names);
+  const actualShots = await filesWithExtension(shotDir, ".png");
+  const shotSet = compareFileSets(expectedShots, actualShots);
+  for (const name of shotSet.missing) {
+    ok = false;
+    console.log(`  FAIL ${name}  missing`);
+  }
+  for (const name of shotSet.extra) {
+    ok = false;
+    console.log(`  FAIL ${name}  unexpected`);
+  }
+  for (const name of actualShots.filter((file) => !shotSet.extra.includes(file))) {
+    const file = join(shotDir, name);
     const r = await execOrThrow("sips", [
       "-g",
       "pixelWidth",
@@ -600,8 +642,20 @@ export async function verify(
   if (!previewSpec) return ok;
 
   const previewDir = join(cfg.outDir, "previews", deviceKey, locale);
-  const videos = await exec("sh", ["-c", `ls ${previewDir}/*.mp4 2>/dev/null`], { quiet: true });
-  for (const file of videos.stdout.split("\n").filter(Boolean)) {
+  const previewScene = cfg.scenes.find(isPreview);
+  const expectedVideos = previewScene ? [`${previewScene.id}.mp4`] : [];
+  const actualVideos = await filesWithExtension(previewDir, ".mp4");
+  const videoSet = compareFileSets(expectedVideos, actualVideos);
+  for (const name of videoSet.missing) {
+    ok = false;
+    console.log(`  FAIL ${name}  missing`);
+  }
+  for (const name of videoSet.extra) {
+    ok = false;
+    console.log(`  FAIL ${name}  unexpected`);
+  }
+  for (const name of actualVideos.filter((file) => !videoSet.extra.includes(file))) {
+    const file = join(previewDir, name);
     const r = await execOrThrow("ffprobe", [
       "-v",
       "error",
