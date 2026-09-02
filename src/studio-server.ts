@@ -5,13 +5,14 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { dirname, extname, join, normalize, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { exec } from "./exec.ts";
+import { zipDirs } from "./zip.ts";
 
 /**
  * The studio's HTTP surface, shared by `goldie studio` (a static server over
  * the prebuilt studio/dist) and the Vite dev server (studio/vite.config.ts).
  *
  * GET/PUT /api/design - the design choices saved next to the config as
- * goldie.design.json ({ background?, frame?, fontFamily?, copy?, order? }).
+ * goldie.design.json ({ background?, frames?, fontFamily?, copy?, order? }).
  * The CLI's loadConfig() applies the file, so a saved choice also shapes plain
  * `goldie frame` runs. The UI debounces its PUTs; the server writes the file
  * atomically so a half-written JSON never reaches the CLI.
@@ -19,7 +20,7 @@ import { exec } from "./exec.ts";
  * POST /api/export - renders the final assets from the raw captures with the
  * chosen background and frame (goldie frame + preview + manifest), zips
  * out/screenshots and out/previews, and streams the CLI log as plain text.
- * Body: { background?, frame?, font?, template?, layout?, screenOnly? };
+ * Body: { background?, frames?, font?, template?, layout?, screenOnly? };
  * per-scene layouts ride on goldie.design.json, which the CLI reads on its
  * own. The response ends with "[done]" on success or "[failed]" otherwise; on
  * "[done]" the UI downloads GET /api/export/download.
@@ -50,7 +51,8 @@ export function studioPaths(configPath: string): StudioPaths {
 
 export type ExportOptions = {
   background?: string;
-  frame?: string;
+  /** One bezel variant per device key. */
+  frames?: Record<string, string>;
   font?: string;
   template?: string;
   layout?: string;
@@ -163,7 +165,9 @@ export function exportHandler({ paths, cli }: StudioApi): (sub: string) => Handl
 
       const flags: string[] = [];
       if (opts.background) flags.push("--background", opts.background);
-      if (opts.frame) flags.push("--frame", opts.frame);
+      for (const variant of Object.values(opts.frames ?? {})) {
+        if (variant) flags.push("--frame", variant);
+      }
       if (opts.font) flags.push("--font", opts.font);
       if (opts.template) flags.push("--template", opts.template);
       if (opts.layout) flags.push("--layout", opts.layout);
@@ -184,12 +188,8 @@ export function exportHandler({ paths, cli }: StudioApi): (sub: string) => Handl
         }
         res.write("$ zip screenshots + previews\n");
         await rm(paths.exportZip, { force: true });
-        await stream(
-          "zip",
-          ["-r", "-q", paths.exportZip, "screenshots", "previews"],
-          paths.outDir,
-          res,
-        );
+        const count = await zipDirs(paths.outDir, ["screenshots", "previews"], paths.exportZip);
+        res.write(`  ${count} files\n`);
         res.write("[done]\n");
       } catch (err) {
         res.write(`[failed] ${err instanceof Error ? err.message : err}\n`);
@@ -310,7 +310,12 @@ export function serveStudio(api: StudioApi, port = 4321): Promise<string> {
 
 /** Open a URL in the default browser; best effort. */
 export async function openInBrowser(url: string): Promise<void> {
-  const cmd =
-    process.platform === "darwin" ? "open" : process.platform === "win32" ? "start" : "xdg-open";
-  await exec(cmd, [url], { quiet: true });
+  // `start` is a cmd.exe builtin, not a program; the empty string is its window title.
+  const [cmd, args] =
+    process.platform === "darwin"
+      ? ["open", [url]]
+      : process.platform === "win32"
+        ? ["cmd", ["/c", "start", '""', url]]
+        : ["xdg-open", [url]];
+  await exec(cmd, args, { quiet: true });
 }

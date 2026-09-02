@@ -46,6 +46,11 @@ export const FONTS = {
     fallback: "system-ui, sans-serif",
     files: { 400: "Montserrat-400.ttf", 700: "Montserrat-700.ttf" },
   },
+  "noto-sans-sc": {
+    family: "Noto Sans SC",
+    fallback: '"PingFang SC", "Microsoft YaHei", sans-serif',
+    files: { 400: "NotoSansSC-400.otf", 700: "NotoSansSC-700.otf" },
+  },
 } as const satisfies Record<string, BundledFont>;
 
 export type FontKey = keyof typeof FONTS;
@@ -68,6 +73,18 @@ export function fontStack(key: string): string {
     throw new Error(`Unknown font "${key}". Available: system, ${FONT_KEYS.join(", ")}`);
   }
   return `"${font.family}", ${font.fallback}`;
+}
+
+/**
+ * The canvas resolves glyphs only against families it knows; unlike a browser
+ * it never falls back to other system fonts, so CJK copy over a latin-only
+ * stack exports as tofu boxes. Appending the bundled CJK typeface as a last
+ * resort fixes that: skia falls through per glyph, so latin text keeps its
+ * chosen face and only characters the stack cannot draw reach the fallback.
+ */
+export function withGlyphFallback(stack: string): string {
+  const cjk = FONTS["noto-sans-sc"].family;
+  return stack.includes(cjk) ? stack : `${stack}, "${cjk}"`;
 }
 
 let registered = false;

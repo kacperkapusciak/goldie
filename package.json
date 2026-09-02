@@ -1,6 +1,6 @@
 {
   "name": "goldie",
-  "version": "0.2.1",
+  "version": "0.3.1",
   "description": "App Store screenshot and preview automation driven by argent",
   "license": "MIT",
   "repository": {
@@ -15,6 +15,8 @@
     "ios",
     "simulator",
     "argent",
+    "android",
+    "google-play",
     "claude-skill"
   ],
   "type": "module",
@@ -32,6 +34,10 @@
   "files": [
     "dist/",
     "assets/17-pro-*.png",
+    "assets/ipad-pro-13-*.png",
+    "assets/pixel-10-pro.webp",
+    "assets/favicon.png",
+    "assets/ATTRIBUTION.md",
     "assets/fonts/",
     "studio/dist/",
     "skills/",
@@ -41,7 +47,9 @@
     "node": ">=20.12.0"
   },
   "os": [
-    "darwin"
+    "darwin",
+    "linux",
+    "win32"
   ],
   "publishConfig": {
     "access": "public"

@@ -6,7 +6,7 @@
  * the exported PNG identical. Every number that shapes a composition lives
  * here; neither renderer carries geometry or type sizes of its own.
  */
-import { FRAME } from "./frame.ts";
+import { FRAME, type FrameGeometry } from "./frame.ts";
 
 export const LAYOUT_KEYS = [
   "classic",
@@ -311,6 +311,8 @@ export type Composition = {
   /** span × tile width, and the tile height. */
   width: number;
   height: number;
+  /** Width the geometry was composed at; size type and shadows from this, not the tile. */
+  designWidth: number;
   copy: {
     position: "top" | "bottom";
     align: CopyAlign;
@@ -332,19 +334,34 @@ export type Composition = {
 
 /**
  * Pixel geometry for a layout on a tile of the given size. `screenOnly`
- * drops the bezel: the device box becomes the bare screen cutout.
+ * drops the bezel: the device box becomes the bare screen cutout. `geom` is
+ * the device's bezel geometry (FRAMES in frame.ts); the iPhone's by default.
  */
+/**
+ * Every layout fraction was tuned on the App Store 6.9" tile (1320x2868). A
+ * wider tile (Google Play's 9:16) would let width-driven device sizing climb
+ * into the copy block, so composition happens in this reference aspect and the
+ * column centres in the tile; reference-aspect tiles pass through unchanged.
+ */
+const REF_TILE_ASPECT = 1320 / 2868;
+
 export function compose(
   spec: LayoutSpec,
-  tile: { width: number; height: number },
+  tileIn: { width: number; height: number },
   theme: { copyHeightRatio: number; deviceWidthRatio: number },
-  opts: { screenOnly?: boolean } = {},
+  opts: { screenOnly?: boolean; geom?: FrameGeometry } = {},
 ): Composition {
+  const geom = opts.geom ?? FRAME;
+  const tile =
+    tileIn.width / tileIn.height > REF_TILE_ASPECT + 1e-6
+      ? { width: tileIn.height * REF_TILE_ASPECT, height: tileIn.height }
+      : tileIn;
+  const dx = (spec.span * (tileIn.width - tile.width)) / 2;
   const width = tile.width * spec.span;
   const height = tile.height;
   const art = opts.screenOnly
-    ? { width: FRAME.screen.width, height: FRAME.screen.height, screen: { x: 0, y: 0 } }
-    : { width: FRAME.width, height: FRAME.height, screen: FRAME.screen };
+    ? { width: geom.screen.width, height: geom.screen.height, screen: { x: 0, y: 0 } }
+    : { width: geom.width, height: geom.height, screen: geom.screen };
 
   const isClassic = spec.key === "classic";
   const copyHeight =
@@ -362,48 +379,67 @@ export function compose(
         : spec.copy.align === "left"
           ? padX
           : width / 2;
+    // Centred copy follows the reference column on a wide tile, but a
+    // left-aligned block reads against the card's left edge, so it skips
+    // the centring shift and keeps its inset from the real edge.
+    const copyDx = spec.copy.align === "left" ? 0 : dx;
     const boxLeft = spec.copy.align === "left" ? x : x - maxWidth / 2;
     const top = spec.copy.position === "top" ? 0 : height - copyHeight;
     copy = {
       position: spec.copy.position,
       align: spec.copy.align,
-      x,
+      x: x + copyDx,
       y: spec.copy.position === "top" ? height * TYPE.padTop : height - height * TYPE.padBottom,
       maxWidth,
-      box: { left: boxLeft, top, width: maxWidth, height: copyHeight },
+      box: { left: boxLeft + copyDx, top, width: maxWidth, height: copyHeight },
     };
   }
 
+  // Copy composes in the reference column, but a device shrunk into it leaves
+  // dead margins on a wider tile. Devices there keep their real-tile size and
+  // slide until they clear the copy band — down past a top band, up past a
+  // bottom one — bleeding off the far edge the way dense 9:16 frames do;
+  // reference-aspect tiles skip both adjustments. A
+  // copy-less layout (minimal) shows the whole device, so real-tile sizing
+  // would push it past the tile's top and bottom; it keeps the reference size.
+  const squat = tile !== tileIn;
   const devices = spec.devices.map((d) => {
     const widthRatio = isClassic ? theme.deviceWidthRatio : d.widthRatio;
-    let scale = (tile.width * widthRatio) / art.width;
+    const deviceTile = squat && !d.fitBelowCopy && spec.copy.position !== "none" ? tileIn : tile;
+    let scale = (deviceTile.width * widthRatio) / art.width;
     let left: number;
     let top: number;
     if (d.fitBelowCopy) {
       const bottomMargin = height * CLASSIC_BOTTOM_MARGIN;
       const available = height - copyHeight - bottomMargin;
       scale = Math.min(scale, available / art.height);
-      left = (width - art.width * scale) / 2;
+      left = (width - art.width * scale) / 2 + dx;
       top = copyHeight + (available - art.height * scale) / 2;
     } else {
-      left = width * d.x - (art.width * scale) / 2;
+      left = tileIn.width * spec.span * d.x - (art.width * scale) / 2;
       top = height * d.y - (art.height * scale) / 2;
+      if (squat && copy && spec.copy.position === "top") {
+        top = Math.max(top, copy.box.height + height * 0.015);
+      }
+      if (squat && copy && spec.copy.position === "bottom") {
+        top = Math.min(top, copy.box.top - height * 0.015 - art.height * scale);
+      }
     }
     return {
       frame: { left, top, width: art.width * scale, height: art.height * scale },
       screen: {
         left: left + art.screen.x * scale,
         top: top + art.screen.y * scale,
-        width: FRAME.screen.width * scale,
-        height: FRAME.screen.height * scale,
-        radius: FRAME.screenRadius * scale,
+        width: geom.screen.width * scale,
+        height: geom.screen.height * scale,
+        radius: geom.screenRadius * scale,
       },
       rotate: d.rotate,
       capture: d.capture,
     };
   });
 
-  return { width, height, copy, devices };
+  return { width: tileIn.width * spec.span, height, copy, devices, designWidth: tile.width };
 }
 
 /** Whether a layout draws a second capture, which needs the scene's `secondScene`. */

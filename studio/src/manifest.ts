@@ -25,12 +25,23 @@ export type Decoration =
 export type LayoutEntry = { key: string; label: string; description: string; span: number };
 export type TemplateEntry = { key: string; label: string; description: string; sequence: string[] };
 
+/** Mirrors FrameGeometry in src/frame.ts: a bezel image's box and the screen cutout inside it. */
+export type FrameGeometry = {
+  width: number;
+  height: number;
+  screen: { x: number; y: number; width: number; height: number };
+  screenRadius: number;
+};
+
 export type DeviceEntry = {
   key: string;
   label: string;
-  simulatorName: string;
+  platform: "ios" | "android";
+  simulatorName: string | null;
   screenshot: { width: number; height: number };
-  preview: { width: number; height: number };
+  preview: { width: number; height: number } | null;
+  /** Bezel art fixed to this device (android), null when the frame picker applies. */
+  frame: { url: string; geom: FrameGeometry } | null;
 };
 
 export type DesignScene = {
@@ -56,9 +67,10 @@ export type DeviceCaptures = {
 
 export type Design = {
   theme: Theme;
-  /** null when the config points at custom bezel art. */
-  frameVariant: string | null;
-  frameVariants: string[];
+  /** The bundled variant each device renders with; null when the config points at custom bezel art. */
+  frames: Record<string, string | null>;
+  /** Every bundled variant and the device it is drawn for. */
+  frameVariants: Array<{ key: string; device: string }>;
   customFrameUrl: string | null;
   /** Bundled typefaces with the @font-face sources to declare. */
   fonts: BundledFont[];
@@ -97,16 +109,30 @@ export type StoreManifest = {
   design: Design;
 };
 
+/** A load failure with the CLI command that fixes it, for the empty state. */
+export class ManifestError extends Error {
+  constructor(
+    message: string,
+    readonly command: string,
+  ) {
+    super(message);
+  }
+}
+
 export async function loadManifest(): Promise<StoreManifest> {
   const res = await fetch("/store.json", { cache: "no-store" });
   if (!res.ok) {
-    throw new Error(
-      "No out/store.json. Generate the assets first:  goldie all  (or  goldie manifest)",
+    throw new ManifestError(
+      "There is no out/store.json yet. Generate the assets first.",
+      "goldie all",
     );
   }
   const manifest: StoreManifest = await res.json();
-  if (!manifest.design?.fonts || !manifest.design.layouts) {
-    throw new Error("out/store.json predates browser-side composition. Re-run: goldie manifest");
+  if (!manifest.design?.fonts || !manifest.design.layouts || !manifest.design.frames) {
+    throw new ManifestError(
+      "out/store.json predates browser-side composition. Regenerate it.",
+      "goldie manifest",
+    );
   }
 
   // Raw captures keep their names across a re-capture, so the manifest's
@@ -123,7 +149,10 @@ export async function loadManifest(): Promise<StoreManifest> {
 /** The design choices saved on disk next to the config; see src/studio-server.ts. */
 export type SavedDesign = {
   background?: string;
+  /** One variant for the device it is drawn for; written by older studios. */
   frame?: string;
+  /** A bezel variant per device key. */
+  frames?: Record<string, string>;
   fontFamily?: string;
   /** Copy edited in the lightbox, per screenshot scene id, then locale. */
   copy?: Record<string, SceneCopy>;

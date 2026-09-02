@@ -1,18 +1,34 @@
-import { copyFile, mkdir, readdir, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
-import { basename, dirname, join, relative, resolve } from "node:path";
+import {
+  copyFile,
+  lstat,
+  mkdir,
+  readdir,
+  readFile,
+  rm,
+  stat,
+  symlink,
+  unlink,
+  writeFile,
+} from "node:fs/promises";
+import { basename, dirname, extname, join, relative, resolve } from "node:path";
 import type { CaptureManifest } from "./capture.ts";
 import {
   type Decoration,
+  deviceFrame,
   FRAME_VARIANTS,
   framePath,
+  frameVariantFor,
   isPreview,
   isScreenshot,
   type LoadedConfig,
   type Theme,
+  VARIANT_DEVICE,
   variantFramePath,
 } from "./config.ts";
 import { execOrThrow } from "./exec.ts";
 import { FONTS, fontFilePath } from "./fonts.ts";
+import type { FrameGeometry } from "./frame.ts";
+import { imageSize } from "./image.ts";
 import { LAYOUTS, TEMPLATES } from "./layouts.ts";
 import { DEVICES, type DeviceKey } from "./specs.ts";
 
@@ -43,9 +59,16 @@ export type StoreManifest = {
   devices: Array<{
     key: DeviceKey;
     label: string;
-    simulatorName: string;
+    platform: "ios" | "android";
+    simulatorName: string | null;
     screenshot: { width: number; height: number };
-    preview: { width: number; height: number };
+    preview: { width: number; height: number } | null;
+    /**
+     * Bezel art fixed to this device (the android Pixel art), with the
+     * geometry it composes at. null on devices that render the frame variant
+     * the design picks.
+     */
+    frame: { url: string; geom: FrameGeometry } | null;
   }>;
   locales: string[];
   /** Keyed by device key, then locale. */
@@ -53,10 +76,11 @@ export type StoreManifest = {
   /** Everything the studio needs to composite scenes in the browser. */
   design: {
     theme: Theme;
-    /** null when the config points at custom bezel art. */
-    frameVariant: string | null;
-    frameVariants: string[];
-    /** Url of the config's custom bezel art; null when a bundled variant is used. */
+    /** The bundled variant each device renders with; null when the config points at custom bezel art. */
+    frames: Record<string, string | null>;
+    /** Every bundled variant and the device it is drawn for. */
+    frameVariants: Array<{ key: string; device: string }>;
+    /** Url of the config's custom bezel art; null when bundled variants are used. */
     customFrameUrl: string | null;
     /** Bundled typefaces, with the @font-face sources the studio declares. */
     fonts: Array<{
@@ -129,11 +153,26 @@ export async function writeManifest(cfg: LoadedConfig): Promise<string> {
   // frames never waits on a server.
   const framesDir = join(webDir, "frames");
   await mkdir(framesDir, { recursive: true });
+  const frameVariants: StoreManifest["design"]["frameVariants"] = [];
   for (const variant of FRAME_VARIANTS) {
     await copyFile(variantFramePath(variant), join(framesDir, `${variant}.png`));
+    frameVariants.push({ key: variant, device: VARIANT_DEVICE[variant] });
   }
   const custom = "variant" in cfg.frame ? null : "frames/custom.png";
   if (custom) await copyFile(framePath(cfg), join(webDir, custom));
+  const frames: StoreManifest["design"]["frames"] = {};
+  for (const device of cfg.devices) frames[device] = frameVariantFor(cfg, device);
+
+  // Bezel art a device brings itself, copied under its device key: the
+  // android Pixel art, which the frame picker does not apply to.
+  const deviceFrames: Record<string, { url: string; geom: FrameGeometry }> = {};
+  for (const key of cfg.devices) {
+    if (DEVICES[key].platform !== "android") continue;
+    const { image, geom } = deviceFrame(cfg, key);
+    const url = `frames/${key}${extname(image)}`;
+    await copyFile(image, join(webDir, url));
+    deviceFrames[key] = { url, geom };
+  }
 
   // Bundled typefaces, so the browser renders the same cuts the canvas does.
   const fontsDir = join(webDir, "fonts");
@@ -206,16 +245,18 @@ export async function writeManifest(cfg: LoadedConfig): Promise<string> {
     devices: cfg.devices.map((key) => ({
       key,
       label: DEVICES[key].label,
-      simulatorName: DEVICES[key].simulatorName,
+      platform: DEVICES[key].platform,
+      simulatorName: DEVICES[key].simulatorName ?? null,
       screenshot: DEVICES[key].screenshot,
       preview: DEVICES[key].preview,
+      frame: deviceFrames[key] ?? null,
     })),
     locales: cfg.locales,
     assets,
     design: {
       theme: cfg.theme,
-      frameVariant: "variant" in cfg.frame ? cfg.frame.variant : null,
-      frameVariants: [...FRAME_VARIANTS],
+      frames,
+      frameVariants,
       customFrameUrl: custom,
       fonts,
       layouts: Object.values(LAYOUTS).map(({ key, label, description, span }) => ({
@@ -261,9 +302,8 @@ async function collect(
   deviceKey: DeviceKey,
   locale: string,
 ): Promise<LocaleAssets> {
-  const label = DEVICES[deviceKey].label;
-  const shotDir = join(cfg.outDir, "screenshots", label, locale);
-  const previewDir = join(cfg.outDir, "previews", label, locale);
+  const shotDir = join(cfg.outDir, "screenshots", deviceKey, locale);
+  const previewDir = join(cfg.outDir, "previews", deviceKey, locale);
   const sceneOrder = cfg.scenes.filter(isScreenshot).map((s) => s.id);
 
   const screenshots: LocaleAssets["screenshots"] = [];
@@ -274,7 +314,7 @@ async function collect(
     const sceneId = sceneOrder.find((id) => name.includes(id)) ?? basename(name, ".png");
     screenshots.push({
       sceneId,
-      url: `screenshots/${label}/${locale}/${name}`,
+      url: `screenshots/${deviceKey}/${locale}/${name}`,
       width,
       height,
       bytes: (await stat(file)).size,
@@ -289,7 +329,7 @@ async function collect(
     const probe = await videoInfo(file);
     preview = {
       sceneId: previewScene.id,
-      url: `previews/${label}/${locale}/${previewName}`,
+      url: `previews/${deviceKey}/${locale}/${previewName}`,
       ...probe,
       bytes: (await stat(file)).size,
     };
@@ -300,18 +340,24 @@ async function collect(
 
 const ls = async (dir: string) => readdir(dir).catch(() => [] as string[]);
 
-/** Relative symlink, replaced on every run so a moved out/ never goes stale. */
+/**
+ * Directory link, replaced on every run so a moved out/ never goes stale.
+ * A relative symlink on macOS and Linux. On Windows a directory symlink needs
+ * Developer Mode or a privilege most accounts lack, so an NTFS junction is
+ * used instead; junctions need an absolute target and no special rights.
+ */
 async function link(target: string, path: string): Promise<void> {
-  await rm(path, { recursive: true, force: true });
-  await symlink(relative(dirname(path), target), path, "dir");
-}
-
-async function imageSize(file: string) {
-  const r = await execOrThrow("sips", ["-g", "pixelWidth", "-g", "pixelHeight", file]);
-  return {
-    width: Number(r.stdout.match(/pixelWidth:\s*(\d+)/)?.[1]),
-    height: Number(r.stdout.match(/pixelHeight:\s*(\d+)/)?.[1]),
-  };
+  // Unlink an existing link by name; a recursive rm must never follow a
+  // junction into the real captures on a rerun.
+  const existing = await lstat(path).catch(() => null);
+  if (existing?.isSymbolicLink()) await unlink(path);
+  else if (existing) await rm(path, { recursive: true, force: true });
+  if (process.platform === "win32") {
+    await mkdir(target, { recursive: true }); // a junction to a missing dir is dangling
+    await symlink(resolve(target), path, "junction");
+  } else {
+    await symlink(relative(dirname(path), target), path, "dir");
+  }
 }
 
 async function videoInfo(file: string) {

@@ -1,4 +1,14 @@
-import { MoonIcon, SunIcon } from "lucide-react";
+import {
+  GalleryHorizontalIcon,
+  LayoutGridIcon,
+  type LucideIcon,
+  MoonIcon,
+  PlayIcon,
+  SmartphoneIcon,
+  SunIcon,
+  TabletIcon,
+} from "lucide-react";
+import { RadioGroup as RadioGroupPrimitive } from "radix-ui";
 import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -9,25 +19,50 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { cn } from "@/lib/utils";
+import type { Platform } from "../App";
 import type { StoreManifest } from "../manifest";
 import { DesignPanel } from "./DesignPanel";
 import { ExportPanel } from "./ExportPanel";
+import type { StripView } from "./Strip";
+
+/**
+ * The device-type rows, in display order. An entry without a platform renders
+ * disabled: iPad stays that way until goldie can capture iPads, which then
+ * needs a platform of its own here and in the app's view state.
+ */
+const DEVICE_TYPES: Array<{
+  key: string;
+  icon: LucideIcon;
+  label: string;
+  platform?: Platform;
+}> = [
+  { key: "iphone", icon: SmartphoneIcon, label: "iPhone", platform: "ios" },
+  { key: "ipad", icon: TabletIcon, label: "iPad" },
+  { key: "android", icon: PlayIcon, label: "Android", platform: "android" },
+];
 
 /**
  * The left rail: the goldie wordmark with the appearance toggle, what the
- * strip shows (device and locale, when there is a choice), the design
- * controls, and a sticky Export footer.
+ * strip shows (device and locale, when there is a choice) and how (one paged
+ * row or a wrapping grid), the design controls, and a sticky Export footer.
  */
 export function Sidebar({
   manifest,
+  platform,
   device,
   locale,
   dark,
+  onPlatform,
   onDevice,
   onLocale,
   onDark,
+  view,
+  onView,
   background,
   frame,
+  frames,
   fontFamily,
   template,
   layout,
@@ -40,14 +75,21 @@ export function Sidebar({
   onScreenOnly,
 }: {
   manifest: StoreManifest;
+  platform: Platform;
   device: string;
   locale: string;
   dark: boolean;
+  onPlatform: (v: Platform) => void;
   onDevice: (v: string) => void;
   onLocale: (v: string) => void;
   onDark: (v: boolean) => void;
+  /** How the tiles are laid out on the stage. */
+  view: StripView;
+  onView: (v: StripView) => void;
   background: string;
+  /** The bezel variant of the device on show, and every device's. */
   frame: string;
+  frames: Record<string, string>;
   fontFamily: string;
   template: string;
   layout: string;
@@ -59,6 +101,7 @@ export function Sidebar({
   onLayout: (v: string) => void;
   onScreenOnly: (v: boolean) => void;
 }) {
+  const platformDevices = manifest.devices.filter((d) => d.platform === platform);
   return (
     <aside className="flex w-[300px] shrink-0 flex-col overflow-hidden rounded-2xl border border-sidebar-border bg-sidebar text-sidebar-foreground">
       <header className="flex h-14 shrink-0 items-center justify-between pr-3 pl-5">
@@ -76,30 +119,83 @@ export function Sidebar({
       </header>
 
       <div className="sidebar-scroll flex-1 overflow-y-auto">
-        {manifest.devices.length > 1 || manifest.locales.length > 1 ? (
-          <div className="flex flex-col gap-4 p-5">
-            {manifest.devices.length > 1 ? (
-              <Field label="Device">
-                <Select
-                  value={device}
-                  onChange={onDevice}
-                  options={manifest.devices.map((d) => [d.key, `${d.label}"`])}
-                />
-              </Field>
-            ) : null}
-            {manifest.locales.length > 1 ? (
-              <Field label="Locale">
-                <Select
-                  value={locale}
-                  onChange={onLocale}
-                  options={manifest.locales.map((l) => [l, l])}
-                />
-              </Field>
-            ) : null}
-          </div>
-        ) : null}
+        {/* Both stores always show, so an iOS-only setup still surfaces that
+            Google Play screenshots exist (and vice versa). */}
+        <RadioGroupPrimitive.Root
+          value={platform === "ios" ? "iphone" : "android"}
+          onValueChange={(key) => {
+            const picked = DEVICE_TYPES.find((t) => t.key === key)?.platform;
+            if (picked) onPlatform(picked);
+          }}
+          aria-label="Device type"
+          className="grid grid-cols-3 gap-2 px-5 pt-4"
+        >
+          {DEVICE_TYPES.map(({ key, icon: Icon, label, platform: target }) => (
+            <RadioGroupPrimitive.Item
+              key={key}
+              value={key}
+              disabled={!target}
+              className={cn(
+                "group relative flex flex-col items-center gap-1 rounded-lg border border-transparent px-1 py-2.5 text-xs font-medium text-muted-foreground transition-colors",
+                "hover:not-data-[state=checked]:bg-muted/60 hover:text-foreground",
+                "focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none",
+                "data-[state=checked]:border-border data-[state=checked]:bg-muted data-[state=checked]:text-foreground",
+                "data-disabled:pointer-events-none data-disabled:opacity-50",
+              )}
+            >
+              <Icon className="size-4 shrink-0" aria-hidden />
+              <span>{label}</span>
+              {target ? null : (
+                <span className="absolute top-1 right-1.5 text-[9px] font-normal text-muted-foreground/70">
+                  Soon
+                </span>
+              )}
+            </RadioGroupPrimitive.Item>
+          ))}
+        </RadioGroupPrimitive.Root>
+        <div className="flex flex-col gap-4 p-5">
+          {platformDevices.length > 1 ? (
+            <Field label="Device">
+              <Select
+                value={device}
+                onChange={onDevice}
+                options={platformDevices.map((d) => [
+                  d.key,
+                  d.platform === "ios" ? `${d.label}"` : d.label,
+                ])}
+              />
+            </Field>
+          ) : null}
+          {manifest.locales.length > 1 ? (
+            <Field label="Locale">
+              <Select
+                value={locale}
+                onChange={onLocale}
+                options={manifest.locales.map((l) => [l, l])}
+              />
+            </Field>
+          ) : null}
+          <Field label="View">
+            <Tabs value={view} onValueChange={(v) => onView(v === "grid" ? "grid" : "strip")}>
+              <TabsList className="w-full" aria-label="Screenshot view">
+                <TabsTrigger value="strip">
+                  <GalleryHorizontalIcon aria-hidden />
+                  Strip
+                </TabsTrigger>
+                <TabsTrigger value="grid">
+                  <LayoutGridIcon aria-hidden />
+                  Grid
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
+          </Field>
+        </div>
         <DesignPanel
           design={manifest.design}
+          device={device}
+          deviceFrame={
+            platform === "android" || Boolean(platformDevices.find((d) => d.key === device)?.frame)
+          }
           background={background}
           frame={frame}
           fontFamily={fontFamily}
@@ -118,7 +214,7 @@ export function Sidebar({
       <footer className="shrink-0 bg-sidebar p-4">
         <ExportPanel
           background={background}
-          frame={frame}
+          frames={frames}
           font={fontKey(manifest.design, fontFamily)}
           template={template}
           layout={layout}

@@ -10,6 +10,8 @@ export type {
 } from "./config.ts";
 export { loadConfig } from "./config.ts";
 export { doctor } from "./doctor.ts";
+export type { FrameGeometry } from "./frame.ts";
+export { FRAMES } from "./frame.ts";
 export type { Composition, LayoutKey, LayoutSpec, TemplateKey, TemplateSpec } from "./layouts.ts";
 export {
   compose,

@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import { FRAMES } from "./frame.ts";
 import { compose, LAYOUT_KEYS, LAYOUTS, needsSecondCapture, resolveScenes } from "./layouts.ts";
+import { DEVICES } from "./specs.ts";
 
 const tile = { width: 1320, height: 2868 };
 const theme = { copyHeightRatio: 0.24, deviceWidthRatio: 0.84 };
@@ -51,6 +53,34 @@ describe("compose", () => {
     expect(screen.height).toBe(frame.height);
   });
 
+  test("a layout composes against the device's own frame geometry", () => {
+    const ipad = { width: 2064, height: 2752 };
+    const art = FRAMES["ipad-13"];
+    const c = compose(LAYOUTS.classic, ipad, theme, { geom: art });
+    const { frame, screen } = c.devices[0]!;
+    const scale = frame.width / art.width;
+    expect(screen.left).toBeCloseTo(frame.left + art.screen.x * scale, 6);
+    expect(screen.top).toBeCloseTo(frame.top + art.screen.y * scale, 6);
+    expect(screen.width).toBeCloseTo(art.screen.width * scale, 6);
+    expect(screen.radius).toBeCloseTo(art.screenRadius * scale, 6);
+    expect(frame.top + frame.height).toBeLessThanOrEqual(ipad.height);
+  });
+
+  test("every bezel's cutout matches its device's capture aspect", () => {
+    // A cutout that drifts from the capture's aspect crops the screenshot,
+    // since drawDevice cover-fits the capture into it.
+    for (const [key, art] of Object.entries(FRAMES)) {
+      const spec = DEVICES[key as keyof typeof DEVICES];
+      // Android captures come at the emulator's own size (native: null) and
+      // the Pixel cutout cover-crops them; the 16:9 Play tile is not the
+      // capture aspect, so the check only holds on iOS.
+      if (spec.native === null) continue;
+      const cutout = art.screen.width / art.screen.height;
+      const capture = spec.screenshot.width / spec.screenshot.height;
+      expect(Math.abs(cutout / capture - 1)).toBeLessThan(0.01);
+    }
+  });
+
   test("duo and panorama-duo need a second capture, the rest do not", () => {
     const duo = LAYOUT_KEYS.filter((k) => needsSecondCapture(LAYOUTS[k]));
     expect(duo.sort()).toEqual(["duo", "duo-tilt", "panorama-duo"]);
@@ -61,6 +91,23 @@ describe("compose", () => {
     expect(c.copy!.position).toBe("bottom");
     expect(c.copy!.box.top + c.copy!.box.height).toBe(tile.height);
     expect(c.copy!.y).toBeCloseTo(tile.height * (1 - 0.05));
+  });
+
+  test("on a wide tile left-aligned copy stays at the card's left edge", () => {
+    const wide = { width: 1080, height: 1920 };
+    const narrow = compose(LAYOUTS.panorama, tile, theme);
+    const c = compose(LAYOUTS.panorama, wide, theme);
+    // The centring shift moves centred copy but never a left-aligned block.
+    expect(c.copy!.box.left).toBeCloseTo(narrow.copy!.box.left * (c.designWidth / tile.width));
+    const centred = compose(LAYOUTS.hero, wide, theme);
+    expect(centred.copy!.box.left).toBeGreaterThan(0);
+  });
+
+  test("on a wide tile the device clears a bottom copy band", () => {
+    const wide = { width: 1080, height: 1920 };
+    const c = compose(LAYOUTS["copy-below"], wide, theme);
+    const { frame } = c.devices[0]!;
+    expect(frame.top + frame.height).toBeLessThanOrEqual(c.copy!.box.top - wide.height * 0.015);
   });
 });
 

@@ -19,10 +19,26 @@ function resolveBin(): string {
   } catch {
     /* not installed next to goldie; fall back to PATH */
   }
-  return "argent";
+  // npm installs a `.cmd` shim on Windows; spawn finds it only by full name.
+  return process.platform === "win32" ? "argent.cmd" : "argent";
 }
 
 const BIN = resolveBin();
+
+/**
+ * The pinned bin is a JS entry point. A shebang makes it directly spawnable on
+ * macOS and Linux, but Windows has no shebang support, so run it through the
+ * node that runs goldie. This also skips the PATH lookup everywhere.
+ */
+const RUNNER: [string, string[]] = /\.[cm]?js$/.test(BIN) ? [process.execPath, [BIN]] : [BIN, []];
+
+function argent(args: string[], opts: { quiet?: boolean } = {}) {
+  return exec(RUNNER[0], [...RUNNER[1], ...args], opts);
+}
+
+function argentOrThrow(args: string[], opts: { quiet?: boolean } = {}) {
+  return execOrThrow(RUNNER[0], [...RUNNER[1], ...args], opts);
+}
 
 type Primitive = string | number | boolean;
 
@@ -40,7 +56,7 @@ export async function run<T = any>(
   tool: string,
   args: Record<string, Primitive | undefined>,
 ): Promise<T> {
-  const r = await execOrThrow(BIN, ["run", tool, "--json", ...flags(args)]);
+  const r = await argentOrThrow(["run", tool, "--json", ...flags(args)]);
   const parsed = parseJsonTail<any>(r.stdout);
   return (parsed?.data ?? parsed) as T;
 }
@@ -51,7 +67,7 @@ export async function runToFile(
   args: Record<string, Primitive | undefined>,
   out: string,
 ): Promise<string> {
-  await execOrThrow(BIN, ["run", tool, "--out", out, ...flags(args)]);
+  await argentOrThrow(["run", tool, "--out", out, ...flags(args)]);
   return out;
 }
 
@@ -81,9 +97,7 @@ export type FlowReport = {
 
 /** Replay a flow YAML headlessly. Never throws - inspect `ok` / `failed`. */
 export async function flow(pathOrName: string, udid: string): Promise<FlowReport> {
-  const r = await exec(BIN, ["flow", "run", pathOrName, "--device", udid, "--json"], {
-    quiet: true,
-  });
+  const r = await argent(["flow", "run", pathOrName, "--device", udid, "--json"], { quiet: true });
   const raw = parseJsonTail<any>(r.stdout);
   const steps: FlowStepReport[] = raw?.steps ?? raw?.report?.steps ?? [];
   const failed = steps.find((s) => s.status === "fail" || s.status === "error") ?? null;
@@ -92,7 +106,7 @@ export async function flow(pathOrName: string, udid: string): Promise<FlowReport
 
 /** Is the argent corner watermark disabled? Previews must not carry it. */
 export async function watermarkDisabled(): Promise<boolean> {
-  const r = await exec(BIN, ["flags"], { quiet: true });
+  const r = await argent(["flags"], { quiet: true });
   const line = r.stdout.split("\n").find((l) => l.includes("video-watermark"));
   return Boolean(line && /disabled/.test(line));
 }
@@ -104,11 +118,11 @@ export async function watermarkDisabled(): Promise<boolean> {
  * then fails its native-devtools handshake.
  */
 export async function restartServer(): Promise<void> {
-  await exec(BIN, ["server", "stop"], { quiet: true });
+  await argent(["server", "stop"], { quiet: true });
   await new Promise((r) => setTimeout(r, 1500));
 }
 
 export async function available(): Promise<boolean> {
-  const r = await exec(BIN, ["--version"], { quiet: true });
+  const r = await argent(["--version"], { quiet: true });
   return r.code === 0;
 }

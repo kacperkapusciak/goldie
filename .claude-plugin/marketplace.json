@@ -5,7 +5,7 @@
     {
       "name": "goldie",
       "source": "./",
-      "description": "App Store screenshots and app preview videos for an iOS app, driven by argent flows on a simulator.",
+      "description": "App Store and Play Store screenshots and app preview videos for an iOS or Android app, driven by argent flows on a simulator or emulator.",
       "category": "productivity"
     }
   ]

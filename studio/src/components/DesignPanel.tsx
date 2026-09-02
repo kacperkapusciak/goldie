@@ -1,5 +1,6 @@
 import { CheckIcon } from "lucide-react";
 import { useEffect, useState } from "react";
+import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Slider } from "@/components/ui/slider";
@@ -22,7 +23,7 @@ export const TRANSPARENT = "transparent";
 /** A checkerboard standing in for a transparent background in the UI. */
 export const CHECKERBOARD = "repeating-conic-gradient(#c8c8c8 0 25%, #f4f4f4 0 50%) 0 0/12px 12px";
 
-const PRESETS: Array<{ name: string; css: string }> = [
+const GRADIENTS: Array<{ name: string; css: string }> = [
   { name: "Arctic", css: "linear-gradient(160deg, #E8F1FF 0%, #F7FAFF 55%, #FFFFFF 100%)" },
   { name: "Peach", css: "linear-gradient(160deg, #FFE8D6 0%, #FFF7F0 55%, #FFFFFF 100%)" },
   { name: "Mint", css: "linear-gradient(160deg, #D9F9EF 0%, #F2FDF9 55%, #FFFFFF 100%)" },
@@ -45,8 +46,74 @@ const PRESETS: Array<{ name: string; css: string }> = [
   { name: "Coral", css: "linear-gradient(160deg, #FB7185 0%, #F97316 100%)" },
   { name: "Teal", css: "linear-gradient(160deg, #2DD4BF 0%, #0F766E 100%)" },
   { name: "Cobalt", css: "linear-gradient(160deg, #3B82F6 0%, #1E1B4B 100%)" },
+];
+
+/** Shade labels matching the Tailwind scales below, lightest first. */
+const SHADE_STEPS = ["50", "100", "200", "300", "400", "500", "600", "700", "800", "900", "950"];
+
+/** The Tailwind color scales behind the solid swatches' shade popunders. */
+const TAILWIND: Record<string, string[]> = {
+  // biome-ignore format: one scale per line reads better
+  slate: ["#F8FAFC", "#F1F5F9", "#E2E8F0", "#CBD5E1", "#94A3B8", "#64748B", "#475569", "#334155", "#1E293B", "#0F172A", "#020617"],
+  // biome-ignore format: one scale per line reads better
+  zinc: ["#FAFAFA", "#F4F4F5", "#E4E4E7", "#D4D4D8", "#A1A1AA", "#71717A", "#52525B", "#3F3F46", "#27272A", "#18181B", "#09090B"],
+  // biome-ignore format: one scale per line reads better
+  red: ["#FEF2F2", "#FEE2E2", "#FECACA", "#FCA5A5", "#F87171", "#EF4444", "#DC2626", "#B91C1C", "#991B1B", "#7F1D1D", "#450A0A"],
+  // biome-ignore format: one scale per line reads better
+  orange: ["#FFF7ED", "#FFEDD5", "#FED7AA", "#FDBA74", "#FB923C", "#F97316", "#EA580C", "#C2410C", "#9A3412", "#7C2D12", "#431407"],
+  // biome-ignore format: one scale per line reads better
+  amber: ["#FFFBEB", "#FEF3C7", "#FDE68A", "#FCD34D", "#FBBF24", "#F59E0B", "#D97706", "#B45309", "#92400E", "#78350F", "#451A03"],
+  // biome-ignore format: one scale per line reads better
+  lime: ["#F7FEE7", "#ECFCCB", "#D9F99D", "#BEF264", "#A3E635", "#84CC16", "#65A30D", "#4D7C0F", "#3F6212", "#365314", "#1A2E05"],
+  // biome-ignore format: one scale per line reads better
+  emerald: ["#ECFDF5", "#D1FAE5", "#A7F3D0", "#6EE7B7", "#34D399", "#10B981", "#059669", "#047857", "#065F46", "#064E3B", "#022C22"],
+  // biome-ignore format: one scale per line reads better
+  cyan: ["#ECFEFF", "#CFFAFE", "#A5F3FC", "#67E8F9", "#22D3EE", "#06B6D4", "#0891B2", "#0E7490", "#155E75", "#164E63", "#083344"],
+  // biome-ignore format: one scale per line reads better
+  blue: ["#EFF6FF", "#DBEAFE", "#BFDBFE", "#93C5FD", "#60A5FA", "#3B82F6", "#2563EB", "#1D4ED8", "#1E40AF", "#1E3A8A", "#172554"],
+  // biome-ignore format: one scale per line reads better
+  violet: ["#F5F3FF", "#EDE9FE", "#DDD6FE", "#C4B5FD", "#A78BFA", "#8B5CF6", "#7C3AED", "#6D28D9", "#5B21B6", "#4C1D95", "#2E1065"],
+  // biome-ignore format: one scale per line reads better
+  fuchsia: ["#FDF4FF", "#FAE8FF", "#F5D0FE", "#F0ABFC", "#E879F9", "#D946EF", "#C026D3", "#A21CAF", "#86198F", "#701A75", "#4A044E"],
+};
+
+const SOLIDS: Array<{ name: string; css: string; family?: string }> = [
   { name: "White", css: "#FFFFFF" },
+  { name: "Cream", css: "#FAF6EE" },
+  { name: "Ash", css: "#E2E8F0", family: "slate" },
+  { name: "Slate", css: "#64748B", family: "slate" },
+  { name: "Charcoal", css: "#27272A", family: "zinc" },
   { name: "Black", css: "#000000" },
+  { name: "Navy", css: "#1E3A8A", family: "blue" },
+  { name: "Blue", css: "#2563EB", family: "blue" },
+  { name: "Cyan", css: "#06B6D4", family: "cyan" },
+  { name: "Emerald", css: "#10B981", family: "emerald" },
+  { name: "Lime", css: "#84CC16", family: "lime" },
+  { name: "Amber", css: "#F59E0B", family: "amber" },
+  { name: "Tangerine", css: "#EA580C", family: "orange" },
+  { name: "Crimson", css: "#DC2626", family: "red" },
+  { name: "Fuchsia", css: "#D946EF", family: "fuchsia" },
+  { name: "Violet", css: "#7C3AED", family: "violet" },
+];
+
+/**
+ * The display name for a background: a preset's name, a Tailwind shade like
+ * "Blue 400" when it came from a shade popunder, else undefined (custom).
+ */
+function backgroundName(background: string): string | undefined {
+  const preset = PRESETS.find((p) => p.css === background);
+  if (preset) return preset.name;
+  const hex = background.toUpperCase();
+  for (const [family, shades] of Object.entries(TAILWIND)) {
+    const i = shades.indexOf(hex);
+    if (i !== -1) return `${family[0].toUpperCase()}${family.slice(1)} ${SHADE_STEPS[i]}`;
+  }
+  return undefined;
+}
+
+const PRESETS: Array<{ name: string; css: string }> = [
+  ...GRADIENTS,
+  ...SOLIDS,
   { name: "Transparent", css: TRANSPARENT },
 ];
 
@@ -55,6 +122,8 @@ const FRAME_META: Record<string, { label: string; tint: string }> = {
   "17-pro-silver": { label: "Silver", tint: "#D8D9DD" },
   "17-pro-blue": { label: "Deep Blue", tint: "#2B3A5C" },
   "17-pro-orange": { label: "Cosmic Orange", tint: "#E0662F" },
+  "ipad-pro-13-silver": { label: "Silver", tint: "#D8D9DD" },
+  "ipad-pro-13-space-gray": { label: "Space Gray", tint: "#53565A" },
 };
 
 /** The studio's "System" font choice; mirrors SYSTEM_FONT in src/fonts.ts. */
@@ -62,6 +131,8 @@ const SYSTEM_FONT = '-apple-system, "SF Pro Display", system-ui, sans-serif';
 
 export function DesignPanel({
   design,
+  device,
+  deviceFrame,
   background,
   frame,
   fontFamily,
@@ -76,6 +147,10 @@ export function DesignPanel({
   onScreenOnly,
 }: {
   design: Design;
+  /** The device on show; the frame choices are the variants drawn for it. */
+  device: string;
+  /** The shown device brings its own bezel art (android), so the frame picker does not apply. */
+  deviceFrame: boolean;
   background: string;
   frame: string;
   fontFamily: string;
@@ -99,28 +174,64 @@ export function DesignPanel({
     fontOptions.push([fontFamily, "custom (from config)"]);
   }
 
-  const preset = PRESETS.find((p) => p.css === background);
+  const bgName = backgroundName(background);
+  // The tab only tracks which palette the user is browsing; a hex background
+  // starts on the solids tab, everything else (gradients, custom) on gradients.
+  const [backgroundTab, setBackgroundTab] = useState(
+    background.startsWith("#") ? "solids" : "gradients",
+  );
+  const swatches: Array<{ name: string; css: string; family?: string }> =
+    backgroundTab === "solids" ? SOLIDS : GRADIENTS;
+  const variants = design.frameVariants.filter((v) => v.device === device).map((v) => v.key);
+  const custom = design.frames[device] === null;
   const frameChoices: Array<[string, string]> = [
-    ...design.frameVariants.map((v): [string, string] => [v, FRAME_META[v]?.label ?? v]),
-    ...(design.frameVariant === null ? [["", "Custom (from config)"] as [string, string]] : []),
+    ...variants.map((v): [string, string] => [v, FRAME_META[v]?.label ?? v]),
+    ...(custom ? [["", "Custom (from config)"] as [string, string]] : []),
   ];
-  const showFrames =
-    !screenOnly && (design.frameVariants.length > 1 || design.frameVariant === null);
+  const showFrames = !screenOnly && !deviceFrame && (variants.length > 1 || custom);
 
   return (
     <div className="flex flex-col gap-5 px-5 py-5">
-      <Field label="Background" hint={preset?.name ?? "Custom"}>
+      <Field label="Background" hint={bgName ?? "Custom"}>
+        <Tabs value={backgroundTab} onValueChange={setBackgroundTab}>
+          <TabsList className="w-full">
+            <TabsTrigger value="gradients">Gradients</TabsTrigger>
+            <TabsTrigger value="solids">Solid colors</TabsTrigger>
+          </TabsList>
+        </Tabs>
         <div className="grid grid-cols-6 gap-1.5">
-          {PRESETS.map((p) => (
-            <Swatch
-              key={p.name}
-              name={p.name}
-              css={p.css}
-              selected={background === p.css}
-              onClick={() => onBackground(p.css)}
-            />
-          ))}
-          <CustomBackground background={background} selected={!preset} onChange={onBackground} />
+          {swatches.map((p) =>
+            p.family ? (
+              <ShadeSwatch
+                key={p.name}
+                name={p.name}
+                css={p.css}
+                family={p.family}
+                background={background}
+                onChange={onBackground}
+              />
+            ) : (
+              <Swatch
+                key={p.name}
+                name={p.name}
+                css={p.css}
+                selected={background === p.css}
+                onClick={() => onBackground(p.css)}
+              />
+            ),
+          )}
+          <Swatch
+            name="Transparent"
+            css={TRANSPARENT}
+            selected={background === TRANSPARENT}
+            onClick={() => onBackground(TRANSPARENT)}
+          />
+          <CustomBackground
+            background={background}
+            solid={backgroundTab === "solids"}
+            selected={!bgName}
+            onChange={onBackground}
+          />
         </div>
       </Field>
 
@@ -200,6 +311,84 @@ function Swatch({
   );
 }
 
+/**
+ * A solid swatch backed by a Tailwind color: clicking picks its default hex,
+ * and the family's full 50-950 shade strip opens in a rectangular popunder.
+ * Radix's HoverCard supplies the hover-intent behavior - an open delay so a
+ * pass-through never flashes the strip, a close delay that tolerates the gap
+ * between swatch and strip, and hover/focus handling on both sides. It stays
+ * controlled so a press on the already-selected swatch also opens the strip,
+ * which is the only way in on touch (HoverCard ignores touch pointers).
+ */
+function ShadeSwatch({
+  name,
+  css,
+  family,
+  background,
+  onChange,
+}: {
+  name: string;
+  css: string;
+  family: string;
+  background: string;
+  onChange: (css: string) => void;
+}) {
+  const shades = TAILWIND[family] ?? [];
+  const [open, setOpen] = useState(false);
+  const selected = background === css;
+  const familyLabel = `${family[0].toUpperCase()}${family.slice(1)}`;
+
+  return (
+    <HoverCard open={open} onOpenChange={setOpen} openDelay={350} closeDelay={200}>
+      <HoverCardTrigger asChild>
+        <button
+          type="button"
+          title={name}
+          aria-label={name}
+          aria-pressed={selected}
+          onClick={() => (selected ? setOpen(true) : onChange(css))}
+          style={{ background: css }}
+          className={`${swatchClass} ${selected ? "ring-2 ring-primary ring-offset-2 ring-offset-sidebar" : "focus-visible:ring-2 focus-visible:ring-ring"}`}
+        >
+          {selected ? <SelectedMark dark={isLight(css)} /> : null}
+        </button>
+      </HoverCardTrigger>
+      <HoverCardContent
+        side="bottom"
+        align="center"
+        sideOffset={4}
+        collisionPadding={12}
+        className="w-auto rounded-lg p-1"
+      >
+        <div className="flex overflow-hidden rounded-md">
+          {shades.map((hex, i) => {
+            const label = `${familyLabel} ${SHADE_STEPS[i]}`;
+            const on = background.toUpperCase() === hex;
+            return (
+              <button
+                key={hex}
+                type="button"
+                title={label}
+                aria-label={label}
+                aria-pressed={on}
+                onClick={() => onChange(hex)}
+                style={{ background: hex }}
+                className="grid h-7 w-6 place-items-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                {on ? (
+                  <span
+                    className={`size-1.5 rounded-full ${isLight(hex) ? "bg-black/70" : "bg-white/90"}`}
+                  />
+                ) : null}
+              </button>
+            );
+          })}
+        </div>
+      </HoverCardContent>
+    </HoverCard>
+  );
+}
+
 function SelectedMark({ dark }: { dark: boolean }) {
   return (
     <span
@@ -213,16 +402,18 @@ function SelectedMark({ dark }: { dark: boolean }) {
 }
 
 /**
- * The custom background swatch: a popover with two colors, an angle slider
- * and a live preview bar. Equal colors render as a solid, so this covers
- * solids too.
+ * The custom background swatch. On the gradients tab the popover holds two
+ * colors, an angle slider and a live preview bar (equal colors render as a
+ * solid); on the solids tab it is a single color picker.
  */
 function CustomBackground({
   background,
+  solid,
   selected,
   onChange,
 }: {
   background: string;
+  solid: boolean;
   selected: boolean;
   onChange: (css: string) => void;
 }) {
@@ -236,9 +427,9 @@ function CustomBackground({
     setFrom(f);
     setTo(t);
     setAngle(a);
-    onChange(css(f, t, a));
+    onChange(solid ? f : css(f, t, a));
   };
-  const preview = css(from, to, angle);
+  const preview = solid ? from : css(from, to, angle);
 
   return (
     <Popover>
@@ -268,23 +459,29 @@ function CustomBackground({
             style={{ background: preview }}
             aria-hidden
           />
-          <div className="grid grid-cols-2 gap-2">
-            <ColorField label="From" value={from} onChange={(c) => apply(c, to, angle)} />
-            <ColorField label="To" value={to} onChange={(c) => apply(from, c, angle)} />
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <div className="flex items-baseline justify-between text-xs">
-              <span className="text-muted-foreground">Angle</span>
-              <span className="tabular-nums">{angle}°</span>
-            </div>
-            <Slider
-              aria-label="Gradient angle"
-              min={0}
-              max={360}
-              value={[angle]}
-              onValueChange={([a]) => apply(from, to, a ?? angle)}
-            />
-          </div>
+          {solid ? (
+            <ColorField label="Color" value={from} onChange={(c) => apply(c, to, angle)} />
+          ) : (
+            <>
+              <div className="grid grid-cols-2 gap-2">
+                <ColorField label="From" value={from} onChange={(c) => apply(c, to, angle)} />
+                <ColorField label="To" value={to} onChange={(c) => apply(from, c, angle)} />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <div className="flex items-baseline justify-between text-xs">
+                  <span className="text-muted-foreground">Angle</span>
+                  <span className="tabular-nums">{angle}°</span>
+                </div>
+                <Slider
+                  aria-label="Gradient angle"
+                  min={0}
+                  max={360}
+                  value={[angle]}
+                  onValueChange={([a]) => apply(from, to, a ?? angle)}
+                />
+              </div>
+            </>
+          )}
           {!selected ? (
             <button
               type="button"

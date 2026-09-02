@@ -11,14 +11,15 @@ import { CUSTOM_TEMPLATE } from "../App";
  */
 export function ExportPanel({
   background,
-  frame,
+  frames,
   font,
   template,
   layout,
   screenOnly,
 }: {
   background: string;
-  frame: string;
+  /** Bezel variant per device key; empty values mean the config's custom art. */
+  frames: Record<string, string>;
   /** A --font key, or undefined to keep the config's font. */
   font: string | undefined;
   /** A built-in template key, "" for none, or the custom sentinel (left to the sidecar/config). */
@@ -46,7 +47,7 @@ export function ExportPanel({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           background,
-          frame,
+          frames,
           font,
           template: template === CUSTOM_TEMPLATE ? undefined : template || "none",
           layout,

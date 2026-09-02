@@ -8,7 +8,11 @@ export function exec(
   opts: { cwd?: string; quiet?: boolean } = {},
 ): Promise<ExecResult> {
   return new Promise((res) => {
-    const child = spawn(cmd, args, { cwd: opts.cwd, stdio: ["ignore", "pipe", "pipe"] });
+    // Node refuses to spawn .cmd/.bat shims without a shell; with one, it does
+    // not quote arguments, so paths with spaces must be quoted here.
+    const shell = process.platform === "win32" && /\.(cmd|bat)$/i.test(cmd);
+    const argv = shell ? args.map(quoteForCmd) : args;
+    const child = spawn(cmd, argv, { cwd: opts.cwd, shell, stdio: ["ignore", "pipe", "pipe"] });
     let stdout = "";
     let stderr = "";
     child.stdout.on("data", (d) => {
@@ -23,6 +27,10 @@ export function exec(
     child.on("error", (err) => res({ code: 127, stdout, stderr: stderr + String(err) }));
     child.on("close", (code) => res({ code: code ?? 1, stdout, stderr }));
   });
+}
+
+function quoteForCmd(arg: string): string {
+  return /[\s"&|<>^()]/.test(arg) ? `"${arg.replace(/"/g, '\\"')}"` : arg;
 }
 
 export async function execOrThrow(
