@@ -1,4 +1,6 @@
 import {
+  GalleryHorizontalIcon,
+  LayoutGridIcon,
   type LucideIcon,
   MoonIcon,
   PlayIcon,
@@ -22,6 +24,7 @@ import type { Platform } from "../App";
 import type { StoreManifest } from "../manifest";
 import { DesignPanel } from "./DesignPanel";
 import { ExportPanel } from "./ExportPanel";
+import type { StripView } from "./Strip";
 
 /**
  * The device-type rows, in display order. An entry without a platform renders
@@ -40,9 +43,10 @@ const DEVICE_TYPES: Array<{
 ];
 
 /**
- * The left rail: the goldie wordmark with the appearance toggle, what the
- * strip shows (device and locale, when there is a choice), the design
- * controls, and a sticky Export footer.
+ * The left rail: the goldie wordmark with the view (one paged row or a
+ * wrapping grid) and appearance toggles, what the strip shows (device and
+ * locale, when there is a choice), the design controls, and a sticky Export
+ * footer.
  */
 export function Sidebar({
   manifest,
@@ -54,6 +58,8 @@ export function Sidebar({
   onDevice,
   onLocale,
   onDark,
+  view,
+  onView,
   background,
   frame,
   frames,
@@ -77,6 +83,9 @@ export function Sidebar({
   onDevice: (v: string) => void;
   onLocale: (v: string) => void;
   onDark: (v: boolean) => void;
+  /** How the tiles are laid out on the stage. */
+  view: StripView;
+  onView: (v: StripView) => void;
   background: string;
   /** The bezel variant of the device on show, and every device's. */
   frame: string;
@@ -99,14 +108,26 @@ export function Sidebar({
         <h1 className="text-base font-semibold tracking-tight select-none">
           <span className="goldie-wordmark">goldie</span>
         </h1>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          onClick={() => onDark(!dark)}
-          aria-label={dark ? "Switch to light appearance" : "Switch to dark appearance"}
-        >
-          {dark ? <SunIcon /> : <MoonIcon />}
-        </Button>
+        <div className="flex items-center gap-1">
+          {/* Like the appearance button: shows the view a click switches to. */}
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={() => onView(view === "grid" ? "strip" : "grid")}
+            aria-label={view === "grid" ? "Switch to strip view" : "Switch to grid view"}
+            title={view === "grid" ? "Strip view" : "Grid view"}
+          >
+            {view === "grid" ? <GalleryHorizontalIcon /> : <LayoutGridIcon />}
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={() => onDark(!dark)}
+            aria-label={dark ? "Switch to light appearance" : "Switch to dark appearance"}
+          >
+            {dark ? <SunIcon /> : <MoonIcon />}
+          </Button>
+        </div>
       </header>
 
       <div className="sidebar-scroll flex-1 overflow-y-auto">

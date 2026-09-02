@@ -2,7 +2,7 @@ import { CameraIcon, type LucideIcon, SmartphoneIcon, TriangleAlertIcon } from "
 import { useEffect, useRef, useState } from "react";
 import { EmptyState } from "./components/EmptyState";
 import { Sidebar } from "./components/Sidebar";
-import { Strip } from "./components/Strip";
+import { Strip, type StripView } from "./components/Strip";
 import { useHistory } from "./lib/useHistory";
 import {
   type BundledFont,
@@ -83,7 +83,7 @@ export function App() {
  * lightbox, the order tiles were dragged into)
  * are written to goldie.design.json next to the config, debounced, so the
  * CLI picks them up too. The view choices (platform, device, locale, dark) only matter
- * here and live in localStorage under the app's name. Either falls back to
+ * here and live in localStorage under the app's name, as does the strip view. Either falls back to
  * the config when a stored value no longer applies (a device or frame
  * variant removed from the config, for instance).
  */
@@ -119,6 +119,7 @@ function Loaded({ manifest, saved }: { manifest: StoreManifest; saved: SavedDesi
   const [dark, setDark] = useState(
     new URLSearchParams(window.location.search).get("dark") === "1" || view.dark === true,
   );
+  const [stripView, setStripView] = useState<StripView>(view.view === "grid" ? "grid" : "strip");
   const knownLayout = (key: string | undefined) =>
     key && design.layouts.some((l) => l.key === key) ? key : undefined;
   const { state, set } = useHistory<DesignState>(() => ({
@@ -183,8 +184,8 @@ function Loaded({ manifest, saved }: { manifest: StoreManifest; saved: SavedDesi
     }));
 
   useEffect(() => {
-    storeView(manifest.app.name, { platform, device, locale, dark });
-  }, [manifest.app.name, platform, device, locale, dark]);
+    storeView(manifest.app.name, { platform, device, locale, dark, view: stripView });
+  }, [manifest.app.name, platform, device, locale, dark, stripView]);
 
   // Write the design to disk once it has sat still for a moment; a drag on
   // the gradient picker fires many changes a second. Skips the initial mount
@@ -257,6 +258,8 @@ function Loaded({ manifest, saved }: { manifest: StoreManifest; saved: SavedDesi
         onDevice={setDevice}
         onLocale={setLocale}
         onDark={setDark}
+        view={stripView}
+        onView={setStripView}
         background={background}
         frame={frame}
         frames={frames}
@@ -273,7 +276,7 @@ function Loaded({ manifest, saved }: { manifest: StoreManifest; saved: SavedDesi
       />
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <main className="relative grid flex-1 place-items-center overflow-auto p-10">
+        <main className="relative grid min-h-0 flex-1 place-items-center-safe overflow-auto p-10">
           {spec && captures ? (
             <div className="w-full max-w-[1400px]">
               <Strip
@@ -297,6 +300,7 @@ function Loaded({ manifest, saved }: { manifest: StoreManifest; saved: SavedDesi
                 screenOnly={screenOnly}
                 sceneLayouts={sceneLayouts}
                 onSceneLayout={setSceneLayout}
+                view={stripView}
               />
             </div>
           ) : spec ? (
@@ -389,7 +393,13 @@ function Toast({ message }: { message: string }) {
   );
 }
 
-type SavedView = { platform?: string; device?: string; locale?: string; dark?: boolean };
+type SavedView = {
+  platform?: string;
+  device?: string;
+  locale?: string;
+  dark?: boolean;
+  view?: string;
+};
 
 const storageKey = (appName: string) => `goldie-studio:${appName}`;
 
