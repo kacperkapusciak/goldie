@@ -19,7 +19,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import type { Platform } from "../App";
 import type { StoreManifest } from "../manifest";
@@ -110,16 +109,16 @@ export function Sidebar({
           <span className="goldie-wordmark">goldie</span>
         </h1>
         <div className="flex items-center gap-1">
-          <Tabs value={view} onValueChange={(v) => onView(v === "grid" ? "grid" : "strip")}>
-            <TabsList className="h-7 p-0.5" aria-label="Screenshot view">
-              <TabsTrigger value="strip" className="px-1.5" aria-label="Strip view" title="Strip">
-                <GalleryHorizontalIcon aria-hidden />
-              </TabsTrigger>
-              <TabsTrigger value="grid" className="px-1.5" aria-label="Grid view" title="Grid">
-                <LayoutGridIcon aria-hidden />
-              </TabsTrigger>
-            </TabsList>
-          </Tabs>
+          {/* Like the appearance button: shows the view a click switches to. */}
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={() => onView(view === "grid" ? "strip" : "grid")}
+            aria-label={view === "grid" ? "Switch to strip view" : "Switch to grid view"}
+            title={view === "grid" ? "Strip view" : "Grid view"}
+          >
+            {view === "grid" ? <GalleryHorizontalIcon /> : <LayoutGridIcon />}
+          </Button>
           <Button
             variant="ghost"
             size="icon-sm"
