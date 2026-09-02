@@ -44,9 +44,10 @@ const DEVICE_TYPES: Array<{
 ];
 
 /**
- * The left rail: the goldie wordmark with the appearance toggle, what the
- * strip shows (device and locale, when there is a choice) and how (one paged
- * row or a wrapping grid), the design controls, and a sticky Export footer.
+ * The left rail: the goldie wordmark with the view (one paged row or a
+ * wrapping grid) and appearance toggles, what the strip shows (device and
+ * locale, when there is a choice), the design controls, and a sticky Export
+ * footer.
  */
 export function Sidebar({
   manifest,
@@ -108,14 +109,26 @@ export function Sidebar({
         <h1 className="text-base font-semibold tracking-tight select-none">
           <span className="goldie-wordmark">goldie</span>
         </h1>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          onClick={() => onDark(!dark)}
-          aria-label={dark ? "Switch to light appearance" : "Switch to dark appearance"}
-        >
-          {dark ? <SunIcon /> : <MoonIcon />}
-        </Button>
+        <div className="flex items-center gap-1">
+          <Tabs value={view} onValueChange={(v) => onView(v === "grid" ? "grid" : "strip")}>
+            <TabsList className="h-7 p-0.5" aria-label="Screenshot view">
+              <TabsTrigger value="strip" className="px-1.5" aria-label="Strip view" title="Strip">
+                <GalleryHorizontalIcon aria-hidden />
+              </TabsTrigger>
+              <TabsTrigger value="grid" className="px-1.5" aria-label="Grid view" title="Grid">
+                <LayoutGridIcon aria-hidden />
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={() => onDark(!dark)}
+            aria-label={dark ? "Switch to light appearance" : "Switch to dark appearance"}
+          >
+            {dark ? <SunIcon /> : <MoonIcon />}
+          </Button>
+        </div>
       </header>
 
       <div className="sidebar-scroll flex-1 overflow-y-auto">
@@ -153,43 +166,31 @@ export function Sidebar({
             </RadioGroupPrimitive.Item>
           ))}
         </RadioGroupPrimitive.Root>
-        <div className="flex flex-col gap-4 p-5">
-          {platformDevices.length > 1 ? (
-            <Field label="Device">
-              <Select
-                value={device}
-                onChange={onDevice}
-                options={platformDevices.map((d) => [
-                  d.key,
-                  d.platform === "ios" ? `${d.label}"` : d.label,
-                ])}
-              />
-            </Field>
-          ) : null}
-          {manifest.locales.length > 1 ? (
-            <Field label="Locale">
-              <Select
-                value={locale}
-                onChange={onLocale}
-                options={manifest.locales.map((l) => [l, l])}
-              />
-            </Field>
-          ) : null}
-          <Field label="View">
-            <Tabs value={view} onValueChange={(v) => onView(v === "grid" ? "grid" : "strip")}>
-              <TabsList className="w-full" aria-label="Screenshot view">
-                <TabsTrigger value="strip">
-                  <GalleryHorizontalIcon aria-hidden />
-                  Strip
-                </TabsTrigger>
-                <TabsTrigger value="grid">
-                  <LayoutGridIcon aria-hidden />
-                  Grid
-                </TabsTrigger>
-              </TabsList>
-            </Tabs>
-          </Field>
-        </div>
+        {platformDevices.length > 1 || manifest.locales.length > 1 ? (
+          <div className="flex flex-col gap-4 p-5">
+            {platformDevices.length > 1 ? (
+              <Field label="Device">
+                <Select
+                  value={device}
+                  onChange={onDevice}
+                  options={platformDevices.map((d) => [
+                    d.key,
+                    d.platform === "ios" ? `${d.label}"` : d.label,
+                  ])}
+                />
+              </Field>
+            ) : null}
+            {manifest.locales.length > 1 ? (
+              <Field label="Locale">
+                <Select
+                  value={locale}
+                  onChange={onLocale}
+                  options={manifest.locales.map((l) => [l, l])}
+                />
+              </Field>
+            ) : null}
+          </div>
+        ) : null}
         <DesignPanel
           design={manifest.design}
           device={device}
