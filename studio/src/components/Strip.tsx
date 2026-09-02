@@ -386,12 +386,8 @@ export function Strip({
   const visible = pageCells[Math.min(page, pages - 1)];
   const visibleIds = visible.flatMap((c) => (c.sceneId ? [c.sceneId] : []));
   const reorderPage = reorderWithin(visibleIds);
-  // A short last page keeps full-page tile widths, with its tiles centred.
-  const visibleTiles = visible.reduce((n, c) => n + c.tiles.length, 0);
-  const columns =
-    pages > 1
-      ? `repeat(${visibleTiles}, calc((100% - ${PAGE_SIZE - 1} * ${GAP}) / ${PAGE_SIZE}))`
-      : `repeat(${entries.length}, minmax(0, 1fr))`;
+  // Pad the last page so tiles keep the same width as on a full page.
+  const columns = pages > 1 ? PAGE_SIZE : entries.length;
 
   return (
     <div className="flex w-full flex-col gap-3">
@@ -451,8 +447,8 @@ export function Strip({
                 values={visibleIds}
                 onReorder={reorderPage}
                 aria-label="Screenshots, drag to reorder"
-                className="grid w-full list-none items-start justify-center gap-4 p-0"
-                style={{ gridTemplateColumns: columns }}
+                className="grid w-full list-none items-start gap-4 p-0"
+                style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}
                 custom={direction}
                 variants={pageSlide}
                 initial="enter"
