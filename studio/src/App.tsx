@@ -229,13 +229,15 @@ function Loaded({ manifest, saved }: { manifest: StoreManifest; saved: SavedDesi
     return () => style.remove();
   }, [design.fonts]);
 
-  // The exporter appends the bundled CJK typeface as a per-glyph fallback, so
-  // the preview does the same; otherwise the browser would silently substitute
-  // a system font for characters the chosen stack cannot draw. Only the bare
-  // stack is saved to goldie.design.json.
-  const cjk = design.fonts.find((f) => f.key === "noto-sans-sc");
-  const previewFontFamily =
-    cjk && !fontFamily.includes(cjk.family) ? `${fontFamily}, "${cjk.family}"` : fontFamily;
+  // The exporter appends the bundled fallback typefaces as per-glyph last
+  // resorts, so the preview does the same; otherwise the browser would silently
+  // substitute a system font for characters the chosen stack cannot draw - and
+  // the preview would look right where the export does not. Only the bare stack
+  // is saved to goldie.design.json.
+  const previewFontFamily = ["noto-sans-sc", "noto-sans-arabic"].reduce((stack, key) => {
+    const font = design.fonts.find((f) => f.key === key);
+    return font && !stack.includes(font.family) ? `${stack}, "${font.family}"` : stack;
+  }, fontFamily);
 
   const platformDevices = manifest.devices.filter((d) => d.platform === platform);
   const spec = platformDevices.find((d) => d.key === device) ?? platformDevices[0];

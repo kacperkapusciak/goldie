@@ -51,6 +51,11 @@ export const FONTS = {
     fallback: '"PingFang SC", "Microsoft YaHei", sans-serif',
     files: { 400: "NotoSansSC-400.otf", 700: "NotoSansSC-700.otf" },
   },
+  "noto-sans-arabic": {
+    family: "Noto Sans Arabic",
+    fallback: '"Geeza Pro", "Segoe UI", sans-serif',
+    files: { 400: "NotoSansArabic-400.ttf", 700: "NotoSansArabic-700.ttf" },
+  },
 } as const satisfies Record<string, BundledFont>;
 
 export type FontKey = keyof typeof FONTS;
@@ -83,19 +88,58 @@ export function fontStack(key: string): string {
  * chosen face and only characters the stack cannot draw reach the fallback.
  */
 export function withGlyphFallback(stack: string): string {
-  const cjk = FONTS["noto-sans-sc"].family;
-  return stack.includes(cjk) ? stack : `${stack}, "${cjk}"`;
+  for (const key of GLYPH_FALLBACKS) {
+    const { family } = FONTS[key];
+    if (!stack.includes(family)) stack = `${stack}, "${family}"`;
+  }
+  return stack;
 }
 
-let registered = false;
+/**
+ * The bundled faces appended to every canvas font string, in order, as a
+ * per-glyph last resort. Skia falls through per glyph, so latin text keeps the
+ * chosen face and only characters the stack cannot draw reach these.
+ */
+const GLYPH_FALLBACKS = ["noto-sans-sc", "noto-sans-arabic"] as const;
 
-/** Makes every bundled font available to the canvas. Safe to call repeatedly. */
-export function registerFonts() {
-  if (registered) return;
-  registered = true;
-  for (const font of Object.values(FONTS)) {
+/**
+ * A typeface the config supplies itself (`theme.fontFiles`), rather than one of
+ * the bundled ones. `files` holds absolute paths by weight, resolved from the
+ * config's directory when the config is loaded.
+ */
+export type CustomFont = {
+  family: string;
+  files: Record<number, string>;
+};
+
+let registered = false;
+const registeredCustom = new Set<string>();
+
+/**
+ * Makes every bundled font available to the canvas, plus any the config brought
+ * with it. Safe to call repeatedly: each file is registered once.
+ */
+export function registerFonts(custom: CustomFont[] = []) {
+  if (!registered) {
+    registered = true;
+    for (const font of Object.values(FONTS)) {
+      for (const file of Object.values(font.files)) {
+        GlobalFonts.registerFromPath(fontFilePath(file), font.family);
+      }
+    }
+  }
+  for (const font of custom) {
     for (const file of Object.values(font.files)) {
-      GlobalFonts.registerFromPath(fontFilePath(file), font.family);
+      const key = `${font.family}\u0000${file}`;
+      if (registeredCustom.has(key)) continue;
+      registeredCustom.add(key);
+      if (!GlobalFonts.registerFromPath(file, font.family)) {
+        throw new Error(
+          `Could not register font file "${file}" as "${font.family}". ` +
+            `Check theme.fontFiles in the config: the path is resolved against ` +
+            `the config file, and the file must be a format skia can read (ttf, otf).`,
+        );
+      }
     }
   }
 }

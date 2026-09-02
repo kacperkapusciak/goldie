@@ -48,6 +48,13 @@ const config: GoldieConfig = {
     // System stack, or a bundled typeface first: "Merriweather", "DM Mono",
     // "Lato", "DM Sans", "Montserrat" (see src/fonts.ts).
     fontFamily: '-apple-system, "SF Pro Display", system-ui, sans-serif',
+    // Your own typefaces, registered alongside the bundled ones. Required for a
+    // brand font or any script the bundled families do not cover: the copy is
+    // drawn with skia, so an unregistered family exports as tofu boxes.
+    // fontFiles: [
+    //   { family: "Zain", files: { 400: "../assets/fonts/Zain-Regular.ttf",
+    //                              700: "../assets/fonts/Zain-Bold.ttf" } },
+    // ],
     copyHeightRatio: 0.24,
     deviceWidthRatio: 0.84,
     // The strip's rhythm: a built-in template ("editorial", "showcase",

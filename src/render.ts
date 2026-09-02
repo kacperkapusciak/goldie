@@ -59,7 +59,7 @@ export async function renderScreenshots(cfg: LoadedConfig, deviceKey: DeviceKey,
   const { image, geom } = deviceFrame(cfg, deviceKey);
   const screenOnly = Boolean(cfg.theme.screenOnly || spec.screenOnly);
   const bezel = screenOnly ? null : await loadImage(image);
-  registerFonts();
+  registerFonts(cfg.theme.fontFiles);
 
   const tile = spec.screenshot;
   const findShot = (sceneId: string) => {

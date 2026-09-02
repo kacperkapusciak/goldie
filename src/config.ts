@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import type { CustomFont } from "./fonts.ts";
 import { ANDROID_FRAME, FRAMES, type FrameGeometry } from "./frame.ts";
 import {
   isLayoutKey,
@@ -120,6 +121,15 @@ export type Theme = {
   headlineColor: string;
   subheadColor: string;
   fontFamily: string;
+  /**
+   * Extra typefaces to register alongside the bundled ones, so `fontFamily` can
+   * name a face this machine does not have installed - a brand font, or a script
+   * the bundled families do not cover (they are latin plus one CJK fallback, so
+   * arabic, hebrew, thai and the rest export as tofu without this).
+   *
+   * Paths are relative to the config file, like every other path in it.
+   */
+  fontFiles?: CustomFont[];
   /** Fraction of the screenshot height reserved for copy above the device. */
   copyHeightRatio: number;
   /** Fraction of the screenshot width the device bezel occupies. */
@@ -272,12 +282,37 @@ export async function loadConfig(path = defaultConfigPath()): Promise<LoadedConf
       throw new Error(`Unknown device "${key}". Available: ${DEVICE_KEYS.join(", ")}`);
     }
   }
+  resolveFontFiles(loaded); // config-relative font paths -> absolute, once
   applyDesign(loaded, readDesign(path));
   // Fail at load time on a bad variant or missing bezel PNG; android devices
   // never load one from cfg.frame (drawn generic bezel or cfg.android.frame).
   for (const d of loaded.devices) if (DEVICES[d].platform !== "android") framePath(loaded, d);
   validateLayouts(loaded);
   return loaded;
+}
+
+/**
+ * Rewrites `theme.fontFiles` paths to absolute, resolved against the config's
+ * directory, and fails here rather than at draw time on a missing file - a font
+ * that never registers shows up as tofu in the export, which nothing else
+ * catches.
+ */
+function resolveFontFiles(cfg: LoadedConfig): void {
+  const fonts = cfg.theme.fontFiles;
+  if (!fonts) return;
+  cfg.theme.fontFiles = fonts.map((font) => {
+    const files: Record<number, string> = {};
+    for (const [weight, file] of Object.entries(font.files)) {
+      const abs = resolve(cfg.root, file);
+      if (!existsSync(abs)) {
+        throw new Error(
+          `theme.fontFiles: no font file at ${abs} (for "${font.family}" weight ${weight}).`,
+        );
+      }
+      files[Number(weight)] = abs;
+    }
+    return { ...font, files };
+  });
 }
 
 /**

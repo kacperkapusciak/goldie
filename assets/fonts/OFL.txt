@@ -7,6 +7,7 @@ Copyright (c) 2010-2011 by tyPoland Lukasz Dziedzic with Reserved Font Name "Lat
 Copyright 2024 The Merriweather Project Authors (https://github.com/EbenSorkin/Merriweather4) with Reserved Font Name "Merriweather"
 Copyright 2011 The Montserrat Project Authors (https://github.com/JulietaUla/Montserrat)
 Copyright 2014-2021 Adobe (http://www.adobe.com/), with Reserved Font Name 'Source'. Noto is a trademark of Google Inc. (Noto Sans SC, https://github.com/notofonts/noto-cjk)
+Copyright 2022 The Noto Project Authors (https://github.com/notofonts/arabic). Noto is a trademark of Google Inc. (Noto Sans Arabic)
 
 This license is copied below, and is also available with a FAQ at:
 https://openfontlicense.org

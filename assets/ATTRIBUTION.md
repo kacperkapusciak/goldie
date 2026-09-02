@@ -28,3 +28,6 @@ and each family's copyright notice are in `assets/fonts/OFL.txt`.
 - Noto Sans SC, from [notofonts/noto-cjk](https://github.com/notofonts/noto-cjk).
   Copyright 2014-2021 [Adobe](http://www.adobe.com/), with Reserved Font Name
   'Source'. Noto is a trademark of Google Inc.
+- Noto Sans Arabic, from [Google Fonts](https://fonts.google.com/noto/specimen/Noto+Sans+Arabic).
+  Copyright 2022 The Noto Project Authors
+  (https://github.com/notofonts/arabic). Noto is a trademark of Google Inc.

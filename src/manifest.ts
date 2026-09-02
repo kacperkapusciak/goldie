@@ -187,6 +187,20 @@ export async function writeManifest(cfg: LoadedConfig): Promise<string> {
     fonts.push({ key, family: font.family, fallback: font.fallback, faces });
   }
 
+  // Typefaces the config brought with it, copied next to the bundled ones so the
+  // studio's preview and the exported PNGs use the same cuts. Without this the
+  // browser would fall back to a system face and the studio would disagree with
+  // the export for exactly the scripts theme.fontFiles exists to support.
+  for (const font of cfg.theme.fontFiles ?? []) {
+    const faces: Array<{ weight: number; url: string }> = [];
+    for (const [weight, file] of Object.entries(font.files)) {
+      const name = `${font.family}-${weight}${extname(file)}`;
+      await copyFile(file, join(fontsDir, name));
+      faces.push({ weight: Number(weight), url: `fonts/${name}` });
+    }
+    fonts.push({ key: font.family, family: font.family, fallback: "sans-serif", faces });
+  }
+
   // Decoration images, copied so the browser can draw the same layers.
   const decorDir = join(webDir, "decor");
   await mkdir(decorDir, { recursive: true });
