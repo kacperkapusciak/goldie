@@ -288,7 +288,18 @@ export async function shutdown(key: DeviceKey, udid: string): Promise<void> {
 type Pref = { domain: string; key: string; write: string[]; expect: string };
 
 function keyboardAndLocalePrefs(locale: string): Pref[] {
-  const language = locale.split("-")[0]!;
+  // The whole tag, region included. Dropping the region leaves iOS to choose
+  // between an app's regional variants on its own, and for Spanish it chooses
+  // by preference order rather than by AppleLocale: AppleLanguages ("es") with
+  // AppleLocale es_MX resolved to es-ES.lproj, so a capture requested as es-MX
+  // came back saying "ITV" - Spain's roadworthiness test - in an app whose
+  // Mexican strings say "verificación vehicular".
+  //
+  // A tag with no region, like "ru", is unchanged by this. A tag whose region
+  // the app does not carry, like "de-DE" against a bundle holding only
+  // de.lproj, still falls back to the language - that fallback is what
+  // resolution is for, and it is why the region was safe to include.
+  const language = locale;
   const off = (domain: string, key: string): Pref => ({
     domain,
     key,
