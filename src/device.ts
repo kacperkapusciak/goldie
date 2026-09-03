@@ -278,15 +278,33 @@ export async function shutdown(key: DeviceKey, udid: string): Promise<void> {
  * transport pointed at a simulator that no longer exists (every later launch
  * then fails its native-devtools handshake).
  */
+/*
+ * Values are written and read back as JSON via plutil rather than through
+ * `defaults`, which cannot address a simulator's global-preferences file at
+ * all: `defaults` resolves ".GlobalPreferences" to NSGlobalDomain and discards
+ * the directory in front of it, so the write lands on the *host* account. See
+ * pinKeyboardAndLocale.
+ */
 type Pref = { domain: string; key: string; write: string[]; expect: string };
 
 function keyboardAndLocalePrefs(locale: string): Pref[] {
-  const language = locale.split("-")[0]!;
+  // The whole tag, region included. Dropping the region leaves iOS to choose
+  // between an app's regional variants on its own, and for Spanish it chooses
+  // by preference order rather than by AppleLocale: AppleLanguages ("es") with
+  // AppleLocale es_MX resolved to es-ES.lproj, so a capture requested as es-MX
+  // came back saying "ITV" - Spain's roadworthiness test - in an app whose
+  // Mexican strings say "verificación vehicular".
+  //
+  // A tag with no region, like "ru", is unchanged by this. A tag whose region
+  // the app does not carry, like "de-DE" against a bundle holding only
+  // de.lproj, still falls back to the language - that fallback is what
+  // resolution is for, and it is why the region was safe to include.
+  const language = locale;
   const off = (domain: string, key: string): Pref => ({
     domain,
     key,
     write: ["-bool", "false"],
-    expect: "0",
+    expect: "false",
   });
   return [
     off("com.apple.Preferences", "KeyboardAutocorrection"),
@@ -298,13 +316,13 @@ function keyboardAndLocalePrefs(locale: string): Pref[] {
       domain: ".GlobalPreferences",
       key: "AppleLocale",
       write: ["-string", locale.replace("-", "_")],
-      expect: locale.replace("-", "_"),
+      expect: JSON.stringify(locale.replace("-", "_")),
     },
     {
       domain: ".GlobalPreferences",
       key: "AppleLanguages",
-      write: ["-array", language],
-      expect: `(${language})`,
+      write: ["-json", JSON.stringify([language])],
+      expect: JSON.stringify([language]),
     },
   ];
 }
@@ -318,20 +336,49 @@ function prefsDir(udid: string): string {
   );
 }
 
+function plistPath(udid: string, domain: string): string {
+  return join(prefsDir(udid), `${domain}.plist`);
+}
+
+/**
+ * `plutil` rather than `defaults`, because `defaults` cannot address this file.
+ *
+ * `defaults write <dir>/.GlobalPreferences AppleLanguages ...` reads like a
+ * path, but ".GlobalPreferences" is one of the domain names `defaults`
+ * recognises specially: it resolves to NSGlobalDomain, the directory in front
+ * of it is discarded, and the write lands on the *host* account. Asking goldie
+ * for de-DE therefore set the developer's own Mac to German and left the
+ * simulator in whatever language it already had.
+ *
+ * keyboardAndLocalePinned then read the value back through the same broken
+ * path, found the one it had just written to the host, and reported the device
+ * as pinned. Both halves agreed, so the run went green and the screenshots came
+ * out in the wrong language - with the host's language settings changed as a
+ * side effect, which is the part worth fixing quickly.
+ *
+ * plutil takes a file and only a file, so there is no domain for it to be
+ * confused with.
+ */
 export async function pinKeyboardAndLocale(udid: string, locale: string): Promise<void> {
-  const dir = prefsDir(udid);
   for (const pref of keyboardAndLocalePrefs(locale)) {
-    await execOrThrow("defaults", ["write", join(dir, pref.domain), pref.key, ...pref.write]);
+    const path = plistPath(udid, pref.domain);
+    // -replace needs a plist to replace into, and a simulator that has never
+    // had this domain written has no file for it.
+    if (!existsSync(path)) await execOrThrow("plutil", ["-create", "xml1", path]);
+    await execOrThrow("plutil", ["-replace", pref.key, ...pref.write, path]);
   }
 }
 
 /** Does the device's preference store already hold every pinned value? */
 async function keyboardAndLocalePinned(udid: string, locale: string): Promise<boolean> {
-  const dir = prefsDir(udid);
   for (const pref of keyboardAndLocalePrefs(locale)) {
-    const r = await exec("defaults", ["read", join(dir, pref.domain), pref.key], { quiet: true });
+    const path = plistPath(udid, pref.domain);
+    if (!existsSync(path)) return false;
+    const r = await exec("plutil", ["-extract", pref.key, "json", "-o", "-", path], {
+      quiet: true,
+    });
     if (r.code !== 0) return false;
-    if (r.stdout.replace(/\s+/g, "") !== pref.expect) return false;
+    if (r.stdout.trim() !== pref.expect) return false;
   }
   return true;
 }
