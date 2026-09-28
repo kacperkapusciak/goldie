@@ -242,7 +242,11 @@ function Loaded({ manifest, saved }: { manifest: StoreManifest; saved: SavedDesi
 
   const platformDevices = manifest.devices.filter((d) => d.platform === platform);
   const spec = platformDevices.find((d) => d.key === device) ?? platformDevices[0];
-  const captures = spec ? design.captures[spec.key] : undefined;
+  const deviceCaptures = spec ? design.captures[spec.key] : undefined;
+  // With localizedCaptures a locale shows only its own captures: falling back to
+  // another locale's would put the wrong language on screen.
+  const captures = deviceCaptures?.byLocale ? deviceCaptures.byLocale[locale] : deviceCaptures;
+  const missingLocale = Boolean(deviceCaptures?.byLocale) && !captures;
   const firstVariant = design.frameVariants.find((v) => v.device === device)?.key;
   const frameUrl = frame
     ? `frames/${frame}.png`
@@ -308,9 +312,17 @@ function Loaded({ manifest, saved }: { manifest: StoreManifest; saved: SavedDesi
           ) : spec ? (
             <EmptyState
               icon={CameraIcon}
-              title={`No screenshots for the ${deviceLabel(spec)} yet`}
+              title={
+                missingLocale
+                  ? `No ${locale} screenshots for the ${deviceLabel(spec)} yet`
+                  : `No screenshots for the ${deviceLabel(spec)} yet`
+              }
               body={`Ask your coding agent to capture the ${deviceLabel(spec)}, or run:`}
-              command="goldie capture && goldie manifest"
+              command={
+                missingLocale
+                  ? `goldie capture --device ${spec.key} --locale ${locale} && goldie manifest`
+                  : "goldie capture && goldie manifest"
+              }
             />
           ) : (
             <EmptyState {...ENABLE_PLATFORM[platform]} />

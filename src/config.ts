@@ -203,6 +203,16 @@ export type GoldieConfig = {
   };
   devices: DeviceKey[];
   locales: Locale[];
+  /**
+   * Capture each locale in its own language. By default `capture` replays the
+   * flows once, with the simulator pinned to the first locale, and every
+   * locale renders those captures - fine when only the copy is translated.
+   * With this on, iOS devices replay the flows once per locale, pinned to it,
+   * into out/raw/<device>/<locale>/, and each locale renders its own captures,
+   * so the app on screen speaks the headline's language. Android emulators are
+   * not locale-pinned, so they keep one shared capture.
+   */
+  localizedCaptures?: boolean;
   /** Simulator appearance for every capture. */
   appearance: "light" | "dark";
   /**
@@ -475,6 +485,20 @@ export function validateLayouts(cfg: LoadedConfig): void {
  * each other and follow the ordered ones; unknown ids are ignored. Other
  * scenes (the preview) stay where they are.
  */
+/**
+ * The locales a command runs for: all of the config's, or the one --locale
+ * asks for. A locale names output and capture directories, so a value outside
+ * the config (a typo, or a path like "../x") is rejected rather than joined
+ * into a path that could point anywhere on disk.
+ */
+export function selectLocales(locales: string[], requested?: string): string[] {
+  if (requested === undefined) return locales;
+  if (!locales.includes(requested)) {
+    throw new Error(`Unknown locale "${requested}". Configured: ${locales.join(", ")}`);
+  }
+  return [requested];
+}
+
 export function reorderScenes(scenes: Scene[], order: string[]): Scene[] {
   const shots = scenes.filter(isScreenshot);
   const rank = new Map(order.map((id, i) => [id, i]));

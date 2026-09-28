@@ -28,6 +28,9 @@ const config: GoldieConfig = {
   // Every device replays the same flows and gets its own raw captures, output folder and studio view.
   devices: ["iphone-6.9", "ipad-13"],
   locales: ["en-US"],
+  // Capture each locale in its own language (iOS): the flows replay once per locale with the
+  // simulator pinned to it, into out/raw/<device>/<locale>/. Off: one capture, in the first locale.
+  // localizedCaptures: true,
   appearance: "light",           // simulator appearance for every capture
 
   // Bundled bezels: "17-pro-silver" | "17-pro-blue" | "17-pro-orange" for the iPhone,

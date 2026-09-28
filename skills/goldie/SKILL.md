@@ -282,6 +282,7 @@ the next prompt can build on it.
 | Show a different state on one screen | the scene's flow YAML | `capture`, `frame`, `manifest` |
 | Change the preview story or its pacing | preview `segments[]`, `holdSeconds`, flow `wait:` steps | `capture`, `preview`, `manifest` |
 | Another locale | `locales`, plus a `<locale>` key in every copy record | `capture`, `frame`, `preview`, `manifest` |
+| The app itself in each locale's language, not just the copy | `localizedCaptures: true` (iOS devices) | `capture`, `frame`, `preview`, `manifest` |
 
 `capture` replays every flow; to re-capture only what changed, keep the
 other scenes as they are and accept the extra minute, or delete only the

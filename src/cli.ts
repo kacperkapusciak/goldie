@@ -2,7 +2,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { capture } from "./capture.ts";
+import { capture, captureLocales } from "./capture.ts";
 import {
   applyDesign,
   FRAME_VARIANTS,
@@ -10,6 +10,7 @@ import {
   isFrameVariant,
   type LoadedConfig,
   loadConfig,
+  selectLocales,
   VARIANT_DEVICE,
   validateLayouts,
 } from "./config.ts";
@@ -97,14 +98,14 @@ async function main() {
     throw new Error(`Unknown device "${only}". Available: ${DEVICE_KEYS.join(", ")}`);
   }
   const devices = only ? [only] : cfg.devices;
-  const locales = opt("locale") ? [opt("locale")!] : cfg.locales;
+  const locales = selectLocales(cfg.locales, opt("locale"));
 
   switch (command) {
     case "doctor":
       return (await doctor(cfg)) ? 0 : 1;
 
     case "capture":
-      await runCapture(cfg, devices);
+      await runCapture(cfg, devices, locales);
       return 0;
 
     case "frame":
@@ -138,7 +139,7 @@ async function main() {
 
     case "all": {
       if (!(await doctor(cfg))) return 1;
-      await runCapture(cfg, devices);
+      await runCapture(cfg, devices, locales);
       for (const d of devices) {
         for (const l of locales) {
           await renderScreenshots(cfg, d, l);
@@ -163,11 +164,11 @@ function packageVersion(): string {
   return JSON.parse(readFileSync(pkg, "utf8")).version;
 }
 
-async function runCapture(cfg: LoadedConfig, devices: DeviceKey[]) {
+async function runCapture(cfg: LoadedConfig, devices: DeviceKey[], locales: string[]) {
   for (const d of devices) {
     const udid = await device.resolveUdid(d);
     try {
-      await capture(cfg, d);
+      for (const locale of captureLocales(cfg, d, locales)) await capture(cfg, d, locale);
     } finally {
       // Leave the device as it was found; a pinned status bar is sticky.
       await device.clearStatusBar(d, udid);

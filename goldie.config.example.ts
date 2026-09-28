@@ -30,6 +30,7 @@ const config: GoldieConfig = {
 
   devices: ["iphone-6.9", "pixel-10-pro"], // keys from src/specs.ts; "ipad-13" for the 13" iPad
   locales: ["en-US"],
+  // localizedCaptures: true, // capture each locale in its own language (iOS), not just the first
   appearance: "light",
 
   // Bundled bezel art for the screenshots: "17-pro-silver" | "17-pro-blue" |

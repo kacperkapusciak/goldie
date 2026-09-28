@@ -63,6 +63,8 @@ export type BundledFont = {
 export type DeviceCaptures = {
   screenshots: Array<{ sceneId: string; url: string }>;
   clips: Array<{ segmentId: string; url: string; durationSeconds: number }> | null;
+  /** Each locale's own captures when the config sets localizedCaptures. */
+  byLocale?: Record<string, Omit<DeviceCaptures, "byLocale">>;
 };
 
 export type Design = {
@@ -139,9 +141,11 @@ export async function loadManifest(): Promise<StoreManifest> {
   // timestamp becomes a cache-buster - a capture followed by a manifest
   // reload shows new pixels.
   const v = `?v=${Date.parse(manifest.generatedAt) || 0}`;
-  for (const captures of Object.values(manifest.design.captures)) {
-    for (const shot of captures.screenshots) shot.url += v;
-    for (const clip of captures.clips ?? []) clip.url += v;
+  for (const device of Object.values(manifest.design.captures)) {
+    for (const captures of [device, ...Object.values(device.byLocale ?? {})]) {
+      for (const shot of captures.screenshots) shot.url += v;
+      for (const clip of captures.clips ?? []) clip.url += v;
+    }
   }
   return manifest;
 }

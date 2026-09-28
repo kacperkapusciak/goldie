@@ -8,7 +8,7 @@ import {
   loadImage,
   type SKRSContext2D,
 } from "@napi-rs/canvas";
-import type { CaptureManifest } from "./capture.ts";
+import { type CaptureManifest, capturesPerLocale, rawDirFor } from "./capture.ts";
 import {
   type Decoration,
   deviceFrame,
@@ -23,12 +23,19 @@ import { pngInfo } from "./image.ts";
 import { BADGE, type Composition, compose, SCREEN_SHADOW, TYPE } from "./layouts.ts";
 import { DEVICES, type DeviceKey, PREVIEW, SCREENSHOT_PIXEL_FORMAT } from "./specs.ts";
 
-async function readManifest(cfg: LoadedConfig, deviceKey: DeviceKey): Promise<CaptureManifest> {
-  const file = join(cfg.outDir, "raw", deviceKey, "manifest.json");
+async function readManifest(
+  cfg: LoadedConfig,
+  deviceKey: DeviceKey,
+  locale: string,
+): Promise<CaptureManifest> {
+  const file = join(rawDirFor(cfg, deviceKey, locale), "manifest.json");
   try {
     return JSON.parse(await readFile(file, "utf8"));
   } catch {
-    throw new Error(`No capture manifest at ${file}. Run: goldie capture`);
+    const run = capturesPerLocale(cfg, deviceKey)
+      ? `goldie capture --device ${deviceKey} --locale ${locale}`
+      : "goldie capture";
+    throw new Error(`No capture manifest at ${file}. Run: ${run}`);
   }
 }
 
@@ -42,7 +49,7 @@ async function readManifest(cfg: LoadedConfig, deviceKey: DeviceKey): Promise<Ca
  */
 export async function renderScreenshots(cfg: LoadedConfig, deviceKey: DeviceKey, locale: string) {
   const spec = DEVICES[deviceKey];
-  const manifest = await readManifest(cfg, deviceKey);
+  const manifest = await readManifest(cfg, deviceKey, locale);
   // Releases before 0.3 keyed this dir by spec.label; a stale label dir
   // would otherwise ride along into the export zip.
   if (spec.label !== deviceKey)
@@ -480,7 +487,7 @@ export async function renderPreview(cfg: LoadedConfig, deviceKey: DeviceKey, loc
     console.log(`  ${deviceKey} has no preview pipeline`);
     return null;
   }
-  const manifest = await readManifest(cfg, deviceKey);
+  const manifest = await readManifest(cfg, deviceKey, locale);
   if (!manifest.preview)
     throw new Error("No preview clips in the capture manifest. Run: goldie capture");
 

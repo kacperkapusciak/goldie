@@ -68,6 +68,14 @@ A preview must run 15 to 30 seconds. Add `"ipad-13"` to `devices` for
 13" iPad screenshots (2064 x 2752) and a 1200 x 1600 preview from the same
 flows, each device with its own bezels, captures and output folder.
 
+Every locale renders from one capture run in the first locale, which suits
+apps whose screens look the same in every language. Set
+`localizedCaptures: true` to capture each locale in its own language instead:
+`capture` replays the flows once per locale with the simulator pinned to it,
+into `out/raw/<device>/<locale>/`, and each locale's screenshots, preview and
+studio view use its own captures. It applies to iOS devices; Android emulators
+keep one shared capture.
+
 ## Google Play
 
 The `pixel-10-pro` device key renders Google Play phone screenshots

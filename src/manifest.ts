@@ -10,8 +10,8 @@ import {
   unlink,
   writeFile,
 } from "node:fs/promises";
-import { basename, dirname, extname, join, relative, resolve } from "node:path";
-import type { CaptureManifest } from "./capture.ts";
+import { basename, dirname, extname, join, relative, resolve, sep } from "node:path";
+import { type CaptureManifest, capturesPerLocale, rawDirFor } from "./capture.ts";
 import {
   type Decoration,
   deviceFrame,
@@ -112,14 +112,17 @@ export type StoreManifest = {
       segments: Array<{ id: string }>;
     } | null;
     /** Raw capture urls per device key; a device is absent until `goldie capture` ran. */
-    captures: Record<
-      string,
-      {
-        screenshots: Array<{ sceneId: string; url: string }>;
-        clips: Array<{ segmentId: string; url: string; durationSeconds: number }> | null;
-      }
-    >;
+    captures: Record<string, DeviceCaptureUrls & { byLocale?: Record<string, DeviceCaptureUrls> }>;
   };
+};
+
+/**
+ * A device's raw capture urls. With localizedCaptures, `byLocale` holds each
+ * captured locale's own set and the top level repeats the first locale's.
+ */
+export type DeviceCaptureUrls = {
+  screenshots: Array<{ sceneId: string; url: string }>;
+  clips: Array<{ segmentId: string; url: string; durationSeconds: number }> | null;
 };
 
 export type LocaleAssets = {
@@ -241,22 +244,33 @@ export async function writeManifest(cfg: LoadedConfig): Promise<string> {
   }
 
   const captures: StoreManifest["design"]["captures"] = {};
+  // Capture files sit under out/raw, which web/raw links to; a url keeps the
+  // file's path below it, so per-locale dirs come along.
+  const rawRoot = join(cfg.outDir, "raw");
+  const rawUrl = (file: string) => `raw/${relative(rawRoot, file).split(sep).join("/")}`;
+  const urlsOf = (raw: CaptureManifest): DeviceCaptureUrls => ({
+    screenshots: raw.screenshots.map((s) => ({ sceneId: s.sceneId, url: rawUrl(s.file) })),
+    clips: raw.preview
+      ? raw.preview.clips.map((c) => ({
+          segmentId: c.segmentId,
+          url: rawUrl(c.file),
+          durationSeconds: c.durationSeconds,
+        }))
+      : null,
+  });
   for (const deviceKey of cfg.devices) {
-    const raw = await readCaptureManifest(cfg, deviceKey);
-    if (!raw) continue;
-    captures[deviceKey] = {
-      screenshots: raw.screenshots.map((s) => ({
-        sceneId: s.sceneId,
-        url: `raw/${deviceKey}/${basename(s.file)}`,
-      })),
-      clips: raw.preview
-        ? raw.preview.clips.map((c) => ({
-            segmentId: c.segmentId,
-            url: `raw/${deviceKey}/${basename(c.file)}`,
-            durationSeconds: c.durationSeconds,
-          }))
-        : null,
-    };
+    if (!capturesPerLocale(cfg, deviceKey)) {
+      const raw = await readCaptureManifest(cfg, deviceKey, cfg.locales[0]!);
+      if (raw) captures[deviceKey] = urlsOf(raw);
+      continue;
+    }
+    const byLocale: Record<string, DeviceCaptureUrls> = {};
+    for (const locale of cfg.locales) {
+      const raw = await readCaptureManifest(cfg, deviceKey, locale);
+      if (raw) byLocale[locale] = urlsOf(raw);
+    }
+    const first = byLocale[cfg.locales[0]!] ?? Object.values(byLocale)[0];
+    if (first) captures[deviceKey] = { ...first, byLocale };
   }
 
   const previewScene = cfg.scenes.find(isPreview);
@@ -320,9 +334,11 @@ function slug(family: string): string {
 async function readCaptureManifest(
   cfg: LoadedConfig,
   deviceKey: DeviceKey,
+  locale: string,
 ): Promise<CaptureManifest | null> {
   try {
-    return JSON.parse(await readFile(join(cfg.outDir, "raw", deviceKey, "manifest.json"), "utf8"));
+    const dir = rawDirFor(cfg, deviceKey, locale);
+    return JSON.parse(await readFile(join(dir, "manifest.json"), "utf8"));
   } catch {
     return null;
   }
