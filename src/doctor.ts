@@ -66,7 +66,7 @@ export async function doctor(cfg: LoadedConfig): Promise<boolean> {
     name: "argent",
     ok: await argent.available(),
     detail: "device driver",
-    fix: "npm i -g @swmansion/argent   (or set GOLDIE_ARGENT_BIN)",
+    fix: "Reinstall goldie, which ships argent; under Bun, put node on the PATH",
   });
 
   // The watermark flag is ON by default and would brand every preview.

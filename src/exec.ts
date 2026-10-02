@@ -44,17 +44,3 @@ export async function execOrThrow(
   }
   return r;
 }
-
-/** First JSON value in a stream that may be prefixed with human-readable log lines. */
-export function parseJsonTail<T = unknown>(out: string): T | null {
-  const start = out.search(/[[{]/);
-  if (start === -1) return null;
-  for (let end = out.length; end > start; end--) {
-    try {
-      return JSON.parse(out.slice(start, end)) as T;
-    } catch {
-      /* keep shrinking */
-    }
-  }
-  return null;
-}

@@ -1,73 +1,33 @@
-import { exec, execOrThrow, parseJsonTail } from "./exec.ts";
+import { copyFile, mkdir } from "node:fs/promises";
+import { dirname, resolve } from "node:path";
+import { createArgentClient, listFlags } from "@swmansion/argent/client";
 
 /**
- * argent has no importable JS API - `@swmansion/argent` publishes only `bin`.
- * Everything here shells out to the CLI, which is the supported surface.
+ * argent through its Node client. It talks to the same tool-server as the CLI
+ * and starts it when none is running, so no process is spawned per call.
  */
-
-import { createRequire } from "node:module";
-import { dirname, join } from "node:path";
-
-/** Prefer the pinned dependency over whatever happens to be on PATH. */
-function resolveBin(): string {
-  if (process.env.GOLDIE_ARGENT_BIN) return process.env.GOLDIE_ARGENT_BIN;
-  try {
-    const require = createRequire(import.meta.url);
-    const pkgPath = require.resolve("@swmansion/argent/package.json");
-    const pkg = require(pkgPath) as { bin?: Record<string, string> };
-    if (pkg.bin?.argent) return join(dirname(pkgPath), pkg.bin.argent);
-  } catch {
-    /* not installed next to goldie; fall back to PATH */
-  }
-  // npm installs a `.cmd` shim on Windows; spawn finds it only by full name.
-  return process.platform === "win32" ? "argent.cmd" : "argent";
-}
-
-const BIN = resolveBin();
-
-/**
- * The pinned bin is a JS entry point. A shebang makes it directly spawnable on
- * macOS and Linux, but Windows has no shebang support, so run it through the
- * node that runs goldie. This also skips the PATH lookup everywhere.
- */
-const RUNNER: [string, string[]] = /\.[cm]?js$/.test(BIN) ? [process.execPath, [BIN]] : [BIN, []];
-
-function argent(args: string[], opts: { quiet?: boolean } = {}) {
-  return exec(RUNNER[0], [...RUNNER[1], ...args], opts);
-}
-
-function argentOrThrow(args: string[], opts: { quiet?: boolean } = {}) {
-  return execOrThrow(RUNNER[0], [...RUNNER[1], ...args], opts);
-}
+const client = createArgentClient();
 
 type Primitive = string | number | boolean;
 
-function flags(args: Record<string, Primitive | undefined>): string[] {
-  const out: string[] = [];
-  for (const [k, v] of Object.entries(args)) {
-    if (v === undefined) continue;
-    out.push(`--${k}`, String(v));
-  }
-  return out;
-}
-
-/** Invoke a tool and return its parsed `data`. */
+/** Invoke a tool and return its `data`. Artifacts in it are local file paths. */
 export async function run<T = any>(
   tool: string,
   args: Record<string, Primitive | undefined>,
 ): Promise<T> {
-  const r = await argentOrThrow(["run", tool, "--json", ...flags(args)]);
-  const parsed = parseJsonTail<any>(r.stdout);
-  return (parsed?.data ?? parsed) as T;
+  return (await client.callTool<T>(tool, args)).data;
 }
 
-/** Invoke a tool that returns an image/video artifact, writing it to `out`. */
+/** Invoke a tool that returns an image artifact, copying it to `out`. */
 export async function runToFile(
   tool: string,
   args: Record<string, Primitive | undefined>,
   out: string,
 ): Promise<string> {
-  await argentOrThrow(["run", tool, "--out", out, ...flags(args)]);
+  const data = await run<{ image?: unknown }>(tool, args);
+  if (typeof data?.image !== "string") throw new Error(`argent ${tool} returned no image`);
+  await mkdir(dirname(resolve(out)), { recursive: true });
+  await copyFile(data.image, out);
   return out;
 }
 
@@ -97,32 +57,44 @@ export type FlowReport = {
 
 /** Replay a flow YAML headlessly. Never throws - inspect `ok` / `failed`. */
 export async function flow(pathOrName: string, udid: string): Promise<FlowReport> {
-  const r = await argent(["flow", "run", pathOrName, "--device", udid, "--json"], { quiet: true });
-  const raw = parseJsonTail<any>(r.stdout);
-  const steps: FlowStepReport[] = raw?.steps ?? raw?.report?.steps ?? [];
-  const failed = steps.find((s) => s.status === "fail" || s.status === "error") ?? null;
-  return { ok: r.code === 0, raw, steps, failed, stdout: r.stdout + r.stderr };
+  try {
+    // The payload `argent flow run` sends.
+    const { data: raw } = await client.callTool<any>("flow-execute", {
+      flow_path: resolve(pathOrName),
+      project_root: process.cwd(),
+      device: udid,
+      // Headless runs never block on the LLM prerequisite handshake.
+      prerequisiteAcknowledged: true,
+    });
+    const steps: FlowStepReport[] = raw?.steps ?? [];
+    const failed = steps.find((s) => s.status === "fail" || s.status === "error") ?? null;
+    return { ok: raw?.ok === true, raw, steps, failed, stdout: JSON.stringify(raw, null, 2) };
+  } catch (err) {
+    // Rejected before any step ran: a bad flow file, an unknown device.
+    const stdout = err instanceof Error ? err.message : String(err);
+    return { ok: false, raw: null, steps: [], failed: null, stdout };
+  }
 }
 
 /** Is the argent corner watermark disabled? Previews must not carry it. */
 export async function watermarkDisabled(): Promise<boolean> {
-  const r = await argent(["flags"], { quiet: true });
-  const line = r.stdout.split("\n").find((l) => l.includes("video-watermark"));
-  return Boolean(line && /disabled/.test(line));
+  return listFlags().find((f) => f.name === "video-watermark")?.enabled === false;
 }
 
 /**
- * Stop the shared tool-server so the next call auto-spawns a fresh one.
+ * Stop the tool-server so the next call starts a fresh one.
  * Needed after a simulator shutdown: the running server keeps a transport
  * session pointed at the device that went away, and every later `launch`
  * then fails its native-devtools handshake.
  */
 export async function restartServer(): Promise<void> {
-  await argent(["server", "stop"], { quiet: true });
-  await new Promise((r) => setTimeout(r, 1500));
+  await client.stopServer();
 }
 
+/** Can goldie reach argent's tool-server? Starts it when none is running. */
 export async function available(): Promise<boolean> {
-  const r = await argent(["--version"], { quiet: true });
-  return r.code === 0;
+  return client.listTools().then(
+    () => true,
+    () => false,
+  );
 }
